@@ -3,12 +3,10 @@
 #include <vector>
 #include <algorithm>
 #include <math.h>
+#include <time.h>
+#include <stdlib.h>
 
-#define BOOST_ANGLE 25
-#define BOOST_DISTANCE 4000
 
-
-#define ENEMY_CLOSE_FACTOR 3000
 
 using namespace std;
 
@@ -124,12 +122,14 @@ void read_data(Agent **p_me, Location2d **p_checkpoint,
  */
 bool use_boost_p(const Agent &me, const Location2d &dest)
 {
+    static const int k_boost_angle = 20;
+    static const int k_boost_distance = 6000;
     bool rc = false;
     static bool boost_used = false;
     static bool skip_first = true;
     if (!boost_used) {
-        if (abs(me.get_angle_to_dest()) < BOOST_ANGLE &&
-            distance_between(me.get_location(), dest) > BOOST_DISTANCE) {
+        if (abs(me.get_angle_to_dest()) < k_boost_angle &&
+            distance_between(me.get_location(), dest) > k_boost_distance) {
             if (skip_first) {
                 skip_first = false;
             } else {
@@ -175,12 +175,21 @@ int distance_thrust_func(int distance, bool new_destination)
 }
 
 
-/*
 bool enemy_close_p(const Agent &me, const Location2d &enemy)
 {
-    return (distance_between(me.get_location(), enemy) <= ENEMY_CLOSE_FACTOR);
+    static const int k_enemy_close_factor =  2500;
+    return (distance_between(me.get_location(), enemy) <= k_enemy_close_factor);
 }
-*/
+
+
+/**
+ * @return true if I'm very close to the checkpoint.
+ */
+bool checkpoint_close_p(int distance)
+{
+    distance < 1200;
+}
+
 
 void strategy1(const Agent &me, const Location2d &checkpoint, const Location2d &enemy,
                bool same_destination,
@@ -196,20 +205,150 @@ void strategy1(const Agent &me, const Location2d &checkpoint, const Location2d &
         thrust = distance_thrust_func(distance_between(me.get_location(), checkpoint),
                                       !same_destination);
     }
-#if 0
-    if (enemy_close_p(me, enemy)) {
-        thrust = static_cast<int>(thrust * 1.5);
-        if (thrust > 100) {
-            thrust = 100;
-        }
+
+    // attack
+    if (enemy_close_p(me, enemy) && (rand() % 100 < 25)) {
+        cerr << ":debug: attack" << endl;
+        thrust = 100;
+        dest_x = enemy.get_x();
+        dest_y = enemy.get_y();
     }
-#endif
+
 
     if (use_boost_p(me, checkpoint)) {
         thrust = -1;
     }
     cerr << ":debug: x: " << dest_x << ", y: " << dest_y << ", same_destination: "
          << same_destination << ", thrust: " << thrust << endl;
+}
+
+
+/**
+ * Determine optimal speed.
+ */
+int det_optimal_speed(int distance_to_dest, int angle)
+{
+    int opt_speed = 0;
+    if (distance_to_dest < 500) {
+        opt_speed = 200;
+    } else if (distance_to_dest < 1000) {
+        opt_speed = 170;
+    } else if (distance_to_dest < 2000) {
+        opt_speed = 270;
+    } else if (distance_to_dest < 2500) {
+        opt_speed = 320;
+    } else if (distance_to_dest < 3000) {
+        opt_speed = 500;
+    } else {
+        opt_speed = 1000;
+    }
+    // check also the angle
+    if (abs(angle) < 4) {
+        opt_speed += 100;
+    }
+    /*
+    if (abs(angle) > 60) {
+        opt_speed /= 2;
+    } else if (abs(angle) > 45) {
+        opt_speed -= 100;
+    }
+    */
+    cerr << ":debug: optimal speed: " << opt_speed << endl;
+    return opt_speed;
+}
+
+
+int thrust_func_2(int speed, int distance_to_dest, int angle)
+{
+    int thrust = 0;
+    // special case, for big angles
+    if (angle > 90 || angle < -90) {
+        if (checkpoint_close_p(distance_to_dest)) {
+            // just stop to be able to turn
+            thrust = 0;
+        } else {
+            /*
+            if (angle > 135 || angle < -135) {
+                thrust = 5;
+            } else if (angle > 90 || angle < -90) {
+                thrust = 10;
+            }
+            */
+            thrust = 0;
+        }
+    } else {
+        int optimal_speed = det_optimal_speed(distance_to_dest, angle);
+        if (abs(speed - optimal_speed) < 30) {
+            // the speed is good, try to keep it the same
+            thrust = 50;
+        } else if (speed < optimal_speed) {
+            thrust = 100;
+        } else {
+            thrust = 1;
+        }
+    }
+    return thrust;
+}
+
+
+void apply_direction_corrections(const Agent &me, const Location2d &checkpoint, int angle,
+                                 int &dest_x, int &dest_y)
+{
+    int distance = distance_between(me.get_location(), checkpoint);
+    int cx = checkpoint.get_x();
+    int cy = checkpoint.get_y();
+    static const double k_pi = 3.1415926;
+    //if (distance > 1000 && abs(angle) > 6) {
+    //if (distance > 500 && abs(angle) > 4) {
+    if (distance > 1800 && abs(angle) > 4) {
+        cerr << ":debug: before correction: dest_x: " << dest_x
+             << ", dest_y: " << dest_y << endl;
+        double correction_angle = angle;
+        double s = sin(correction_angle * k_pi / 180);
+        double c = cos(correction_angle * k_pi / 180);
+        cx -= me.get_location().get_x();
+        cy -= me.get_location().get_y();
+        double newcx = cx * c - cy * s;
+        double newcy = cx * s + cy * c;
+        dest_x = newcx + me.get_location().get_x();
+        dest_y = newcy + me.get_location().get_y();
+        cerr << ":debug: after correction: dest_x: " << dest_x
+             << ", dest_y: " << dest_y << endl;
+    }
+}
+
+
+void strategy2(const Agent &me, const Location2d &checkpoint, const Location2d &enemy,
+               bool same_destination,
+               int &dest_x, int &dest_y, int &thrust)
+{
+    static bool first = true;
+    static Location2d previous_location;
+    int speed;
+    if (first) {
+        speed = 0;
+        first = false;
+    } else {
+        speed = distance_between(me.get_location(), previous_location);
+    }
+    previous_location = me.get_location();
+    int distance_to_dest = distance_between(me.get_location(), checkpoint);
+    thrust = thrust_func_2(speed, distance_to_dest, me.get_angle_to_dest());
+    if (use_boost_p(me, checkpoint)) {
+        thrust = -1;
+    }
+    dest_x = checkpoint.get_x();
+    dest_y = checkpoint.get_y();
+    if (thrust) {
+        // don't apply correction if we're trying to change direction already
+        apply_direction_corrections(me, checkpoint, me.get_angle_to_dest(), dest_x, dest_y);
+    }
+    cerr << ":debug: x: " << me.get_location().get_x()
+         << ", y: " << me.get_location().get_y() << ", speed: " << speed
+         << ", thrust: " << thrust << endl;
+    cerr << ":debug: dest_x: " << dest_x << ", dest_y: " << dest_y << endl;
+    cerr << ":debug: distance_to_dest: " << distance_to_dest
+         << ", angle: " << me.get_angle_to_dest() << endl;
 }
 
 
@@ -231,7 +370,8 @@ void game_turn()
     }
     prev_checkpoint = *p_checkpoint;
 
-    strategy1(*p_me, *p_checkpoint, *p_enemy, same_destination, go_x, go_y, thrust);
+    //strategy1(*p_me, *p_checkpoint, *p_enemy, same_destination, go_x, go_y, thrust);
+    strategy2(*p_me, *p_checkpoint, *p_enemy, same_destination, go_x, go_y, thrust);
 
     if (thrust == -1) {
         cout << go_x << " " << go_y << " " << "BOOST" << endl;
@@ -249,6 +389,7 @@ void game_turn()
  **/
 int main()
 {
+    srand(time(NULL));
     while (1) {
         game_turn();
     }
