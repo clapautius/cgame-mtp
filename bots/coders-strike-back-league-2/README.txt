@@ -74,3 +74,11 @@ Response time first turn ≤ 1000ms
 Response time per turn ≤ 150ms
 
 _____
+
+
+* Summary of new rules *
+________________________
+
+You now have access to BOOST to give you an extra edge during the race.
+
+Once per race you may substitute your desired thrust with the keyword BOOST to grant your pod a burst of speed.
