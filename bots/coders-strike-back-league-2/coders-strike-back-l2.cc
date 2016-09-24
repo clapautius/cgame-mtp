@@ -175,9 +175,12 @@ int distance_thrust_func(int distance, bool new_destination)
 }
 
 
+/**
+ * @deprecated
+ */
 bool enemy_close_p(const Agent &me, const Location2d &enemy)
 {
-    static const int k_enemy_close_factor =  2500;
+    static const int k_enemy_close_factor =  2000;
     return (distance_between(me.get_location(), enemy) <= k_enemy_close_factor);
 }
 
@@ -322,24 +325,46 @@ void strategy2(const Agent &me, const Location2d &checkpoint, const Location2d &
 {
     static bool first = true;
     static Location2d previous_location;
-    int speed;
+    static int attack = 0;
+    int speed = 0;
+    int distance_to_dest = 0;
     if (first) {
         speed = 0;
-        first = false;
     } else {
         speed = distance_between(me.get_location(), previous_location);
     }
     previous_location = me.get_location();
-    int distance_to_dest = distance_between(me.get_location(), checkpoint);
-    thrust = thrust_func_2(speed, distance_to_dest, me.get_angle_to_dest());
-    if (use_boost_p(me, checkpoint)) {
-        thrust = -1;
+    // special case - attack
+    if (!first && !same_destination
+        && distance_between(me.get_location(), enemy) < 1800) {
+        attack = 5;
     }
-    dest_x = checkpoint.get_x();
-    dest_y = checkpoint.get_y();
-    if (thrust) {
-        // don't apply correction if we're trying to change direction already
-        apply_direction_corrections(me, checkpoint, me.get_angle_to_dest(), dest_x, dest_y);
+    if (attack) {
+        if (distance_between(me.get_location(), enemy) > 2600) {
+            // distance too big, abort attack
+            attack = 0;
+        } else {
+            cerr << ":debug: attack" << endl;
+            thrust = 100;
+            dest_x = enemy.get_x();
+            dest_y = enemy.get_y();
+            --attack;
+        }
+    } else {
+        distance_to_dest = distance_between(me.get_location(), checkpoint);
+        thrust = thrust_func_2(speed, distance_to_dest, me.get_angle_to_dest());
+        if (use_boost_p(me, checkpoint)) {
+            thrust = -1;
+        }
+        dest_x = checkpoint.get_x();
+        dest_y = checkpoint.get_y();
+        if (thrust) {
+            // don't apply correction if we're trying to change direction already
+            apply_direction_corrections(me, checkpoint, me.get_angle_to_dest(), dest_x, dest_y);
+        }
+    }
+    if (first) {
+        first = false;
     }
     cerr << ":debug: x: " << me.get_location().get_x()
          << ", y: " << me.get_location().get_y() << ", speed: " << speed
