@@ -148,15 +148,15 @@ bool use_boost_p(const Agent &me, const Location2d &dest)
 int distance_thrust_func(int distance, bool new_destination)
 {
     static const int k_distance_close_1 = 3500;
-    static const int k_thrust_close_1 = 85;
+    static const int k_thrust_close_1 = 90;
     static const int k_distance_close_2 = 3000;
-    static const int k_thrust_close_2 = 60;
+    static const int k_thrust_close_2 = 75;
     static const int k_distance_close_3 = 2000;
-    static const int k_thrust_close_3 = 25;
+    static const int k_thrust_close_3 = 40;
     static const int k_distance_close_4 = 1000;
-    static const int k_thrust_close_4 = 35;
+    static const int k_thrust_close_4 = 25;
     static const int k_thrust_far = 100;
-    static const int k_start_thrust = 65;
+    static const int k_start_thrust = 40;
     int thrust = 100;
     if (new_destination) {
         thrust = k_start_thrust;
@@ -188,8 +188,10 @@ void strategy1(const Agent &me, const Location2d &checkpoint, const Location2d &
 {
     dest_x = checkpoint.get_x();
     dest_y = checkpoint.get_y();
-    if (me.get_angle_to_dest() > 90 || me.get_angle_to_dest() < -90) {
-        thrust = 20;
+    if (me.get_angle_to_dest() > 135 || me.get_angle_to_dest() < -135) {
+        thrust = 0;
+    } else if (me.get_angle_to_dest() > 90 || me.get_angle_to_dest() < -90) {
+        thrust = 15;
     } else {
         thrust = distance_thrust_func(distance_between(me.get_location(), checkpoint),
                                       !same_destination);
