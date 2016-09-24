@@ -230,15 +230,15 @@ int det_optimal_speed(int distance_to_dest, int angle)
 {
     int opt_speed = 0;
     if (distance_to_dest < 500) {
-        opt_speed = 200;
+        opt_speed = 300;
     } else if (distance_to_dest < 1000) {
-        opt_speed = 170;
-    } else if (distance_to_dest < 2000) {
         opt_speed = 270;
+    } else if (distance_to_dest < 2000) {
+        opt_speed = 370;
     } else if (distance_to_dest < 2500) {
-        opt_speed = 320;
+        opt_speed = 420;
     } else if (distance_to_dest < 3000) {
-        opt_speed = 500;
+        opt_speed = 600;
     } else {
         opt_speed = 1000;
     }
@@ -267,14 +267,12 @@ int thrust_func_2(int speed, int distance_to_dest, int angle)
             // just stop to be able to turn
             thrust = 0;
         } else {
-            /*
             if (angle > 135 || angle < -135) {
-                thrust = 5;
+                thrust = 25;
             } else if (angle > 90 || angle < -90) {
-                thrust = 10;
+                thrust = 40;
             }
-            */
-            thrust = 0;
+            //thrust = 0;
         }
     } else {
         int optimal_speed = det_optimal_speed(distance_to_dest, angle);
