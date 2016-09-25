@@ -334,11 +334,13 @@ void strategy2(const Agent &me, const Location2d &checkpoint, const Location2d &
         speed = distance_between(me.get_location(), previous_location);
     }
     previous_location = me.get_location();
+#if 0
     // special case - attack
     if (!first && !same_destination
         && distance_between(me.get_location(), enemy) < 1800) {
         attack = 5;
     }
+#endif
     if (attack) {
         if (distance_between(me.get_location(), enemy) > 2600) {
             // distance too big, abort attack
