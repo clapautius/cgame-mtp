@@ -6,6 +6,7 @@
 
 using namespace std;
 
+using Location = pair<int, int>;
 
 class Player
 {
@@ -40,6 +41,11 @@ public:
     bool bomb_available() const
     {
         return m_bombs_avail > 0;
+    }
+
+    int bomb_range() const
+    {
+        return m_range;
     }
 
 private:
@@ -111,6 +117,8 @@ enum EntityType
 
 
 vector<vector<EntityType> > g_matrix;
+int g_width = 0;
+int g_height = 0;
 
 void read_data(int width, int height, int my_id)
 {
@@ -123,7 +131,7 @@ void read_data(int width, int height, int my_id)
         for (int j = 0; j < width; j++) {
             if (row[j] == '.') {
                 g_matrix[j][i] = EntityEmpty;
-            } else if (row[j] == '0') {
+            } else if (row[j] == '0' || row[j] == '1' || row[j] == '2' || row[j] == '3') {
                 g_matrix[j][i] = EntityBox;
             } else {
                 // this should not happen but hope for the best
@@ -150,7 +158,8 @@ void read_data(int width, int height, int my_id)
         }
         // :fixme: ignore the bombs for now
     }
-
+    g_width = width;
+    g_height = height;
 }
 
 
@@ -228,7 +237,146 @@ bool near_coord_p(int x, int y, int target_x, int target_y)
 }
 
 
-void game_loop(int width, int height, int my_id)
+struct Target
+{
+    Target(Location l = make_pair(0, 0), int t = -1, int c = 0)
+      : location(l), type(t), cost(c)
+    {};
+
+    bool is_valid() const
+    {
+        return type != -1;
+    }
+
+    Location location;
+
+    int type; // -1 - no target, 0 - bomb, 1 - just move there
+
+    int cost;
+};
+
+
+/**
+ * Compute Manhattan distance between two locations.
+ */
+int distance_between(const Location &loc1, const Location &loc2)
+{
+    return abs(loc1.first - loc2.first) + abs(loc1.second - loc2.second);
+}
+
+
+bool location_valid_p(int x, int y)
+{
+    return (x >= 0 && x < g_width && y >= 0 && y < g_height);
+}
+
+
+void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
+{
+    cerr << ":debug: cost(" << x << ", " << y << "): "; // :debug:
+    if (g_matrix[x][y] == EntityBox) {
+        // we cannot go there, ignore
+        target_type = -1;
+        cerr << "not empty" << endl; // :debug:
+        return;
+    }
+    int distance = distance_between(make_pair(cur_x, cur_y), make_pair(x, y));
+    int boxes = 0;
+    for (int i = x - g_me.bomb_range() + 1; i < x + g_me.bomb_range(); i++) {
+        if (location_valid_p(i, y) && g_matrix[i][y] == EntityBox) {
+            ++boxes;
+            break;
+        }
+    }
+    for (int i = y - g_me.bomb_range() + 1; i < y + g_me.bomb_range(); i++) {
+        if (location_valid_p(x, i) && g_matrix[x][i] == EntityBox) {
+            ++boxes;
+            break;
+        }
+    }
+    // minimum factor for a box should be 25, otherwise sometimes it doesn't worth going
+    // for boxes because they are too far - we want to avoid that
+    cost = boxes * 25 - distance;
+    target_type = 0;
+
+    // :debug:
+    cerr << "boxes=" << boxes << ", distance=" << distance << ", cost=" << cost << endl;
+}
+
+
+Target compute_next_target(bool ignore_current_position)
+{
+    vector<Target> targets;
+    Target result;
+    for (int i = 0; i < g_height; i++) {
+        for (int j = 0; j < g_width; j++) {
+            if (!(ignore_current_position && j == g_me.get_x() && i == g_me.get_y())) {
+                int target_type = -1;
+                int cost;
+                compute_cost(g_me.get_x(), g_me.get_y(), j, i, cost, target_type);
+                if (target_type != -1) {
+                    targets.push_back(Target(make_pair(j, i), target_type, cost));
+                }
+            }
+        }
+    }
+    // sort by cost (cost is actually gain :fixme:)
+    sort(targets.begin(), targets.end(),
+         [] (const Target &a, const Target &b) -> bool
+         { return a.cost < b.cost; });
+
+    if (targets.size() > 0) {
+        result = targets[targets.size() - 1];
+        cerr << ":debug: best target: " << result.location.first << ", "
+             << result.location.second << ", type=" << result.type << ", cost="
+             << result.cost << endl;
+    }
+    return result;
+}
+
+
+void game_loop_level2(int width, int height, int my_id)
+{
+    Target target;
+    static bool first = true;
+    while (1) {
+        read_data(width, height, my_id);
+        Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
+        if (target.is_valid()) {
+            // we have a target
+            if (target.location == cur_loc) {
+                cerr << ":debug: we are here" << endl;
+                if (target.type == 0) {
+                    cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
+                } else {
+                    // just stay here
+                    cout << "MOVE " << cur_loc.first << " " << cur_loc.second
+                         << " a" << endl;
+                }
+                target.type = -1;
+            } else {
+                cout << "MOVE " << target.location.first << " "
+                     << target.location.second << " b" << endl;
+            }
+        } else {
+            // if not first time, ignore current position
+            target = compute_next_target(!first);
+            if (target.is_valid()) {
+                cout << "MOVE " << target.location.first << " "
+                     << target.location.second << " c" << endl;
+            } else {
+                // just stay here
+                cout << "MOVE " << cur_loc.first << " " << cur_loc.second << " d" << endl;
+            }
+        }
+        if (first) {
+            first = false;
+        }
+    }
+}
+
+
+void game_loop_level1(int width, int height, int my_id)
 {
     static pair<int, int> target;
     static bool first = true;
@@ -293,5 +441,5 @@ int main()
         g_matrix[i].resize(height);
     }
 
-    game_loop(width, height, myId);
+    game_loop_level2(width, height, myId);
 }
