@@ -59,6 +59,11 @@ public:
                 entity(x, y) != EntityBombMine && entity(x, y) != EntityBombEnemy);
     }
 
+    bool is_empty_or_bomb(int x, int y) const
+    {
+        return (entity(x, y) != EntityBox && entity(x, y) != EntityWall);
+    }
+
     void set_world_size(int width, int height)
     {
         m_matrix.resize(width);
@@ -71,15 +76,20 @@ public:
      * Determines what cells are accesible.
      */
     void compute_access_zone(int start_x, int start_y);
+    void compute_explosion_access_zone(int start_x, int start_y);
 
     bool is_accesible(int x, int y) const;
+
+    bool is_explosion_accesible(int x, int y) const;
 
 private:
 
     void compute_access_zone_rec(int x, int y);
+    void compute_explosion_access_zone_rec(int x, int y);
 
     vector<vector<EntityType> > m_matrix;
     vector<vector<EntityType> > m_access_matrix;
+    vector<vector<EntityType> > m_explosion_access_matrix;
 
 };
 
@@ -88,8 +98,15 @@ void World::compute_access_zone(int start_x, int start_y)
 {
     m_access_matrix.clear();
     m_access_matrix = m_matrix;
-
     compute_access_zone_rec(start_x, start_y);
+}
+
+
+void World::compute_explosion_access_zone(int start_x, int start_y)
+{
+    m_explosion_access_matrix.clear();
+    m_explosion_access_matrix = m_matrix;
+    compute_explosion_access_zone_rec(start_x, start_y);
 }
 
 
@@ -107,9 +124,29 @@ void World::compute_access_zone_rec(int x, int y)
 }
 
 
+void World::compute_explosion_access_zone_rec(int x, int y)
+{
+    m_explosion_access_matrix[x][y] = EntityMark;
+    vector<pair<int, int> > around = coords_around(x, y);
+    for (auto &coord : around) {
+        if (m_explosion_access_matrix[coord.first][coord.second] != EntityMark) {
+            if (is_empty_or_bomb(coord.first, coord.second)) {
+                compute_explosion_access_zone_rec(coord.first, coord.second);
+            }
+        }
+    }
+}
+
+
 bool World::is_accesible(int x, int y) const
 {
     return m_access_matrix[x][y] == EntityMark;
+}
+
+
+bool World::is_explosion_accesible(int x, int y) const
+{
+    return m_explosion_access_matrix[x][y] == EntityMark;
 }
 
 
@@ -276,8 +313,8 @@ void read_data(int width, int height, int my_id)
                 g_world.matrix()[x][y] = EntityBombMine;
                 Bomb b(owner, x, y, param1, param2);
                 g_my_bombs.push_back(b);
-                //cerr << ":debug: my bomb at " << x << ", " << y << " with timer "
-                //     << param1 << " and range " << param2 << endl;
+                cerr << ":debug: my bomb at " << x << ", " << y << " with timer "
+                     << param1 << " and range " << param2 << endl;
             } else {
                 g_world.matrix()[x][y] = EntityBombEnemy;
                 Bomb b(owner, x, y, param1, param2);
@@ -319,6 +356,30 @@ vector<pair<int, int> > coords_around(int x, int y, bool include_center)
     cerr << endl;
 */
     return result;
+}
+
+
+bool my_bomb_around_p(int x, int y)
+{
+    auto coords = coords_around(x, y);
+    for (auto &c : coords) {
+        if (g_world.entity(c.first, c.second) == EntityBombMine) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+bool enemy_bomb_around_p(int x, int y)
+{
+    auto coords = coords_around(x, y);
+    for (auto &c : coords) {
+        if (g_world.entity(c.first, c.second) == EntityBombEnemy) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -494,6 +555,14 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     }
     target_type = 0;
 
+    if (boxes > 0 && my_bomb_around_p(x, y)) {
+        cost -= 36;
+    }
+
+    if (enemy_bomb_around_p(x, y)) {
+        cost -= 100;
+    }
+
     if (g_world.entity(x, y) == EntityGoodie) {
         if (g_me.bomb_range() >= 5 && g_me.bombs_max() >= 3) {
             cost += 26; // not that important
@@ -564,16 +633,22 @@ bool check_iminent_explosion(Location &ret)
             break;
         }
     }
-    // check if we are close enough
+
+
     bool possible_collision = false;
-    for (auto bomb : g_enemy_bombs) {
-        if (g_world.is_accesible(bomb.get_x(), bomb.get_y())) {
-            possible_collision = true;
-            break;
+    if (fire_in_the_hole) {
+        g_world.compute_explosion_access_zone(g_me.get_x(), g_me.get_y());
+        // check if we are close enough
+        for (auto bomb : g_enemy_bombs) {
+            if (g_world.is_explosion_accesible(bomb.get_x(), bomb.get_y())) {
+                possible_collision = true;
+                break;
+            }
         }
     }
 
     if (!possible_collision) {
+        cerr << ":debug: no possible collision" << endl;
         return false;
     }
 
