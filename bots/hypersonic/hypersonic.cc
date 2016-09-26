@@ -82,6 +82,11 @@ public:
 
     bool is_explosion_accesible(int x, int y) const;
 
+    int vital_space() const
+    {
+        return m_vital_space;
+    }
+
 private:
 
     void compute_access_zone_rec(int x, int y);
@@ -91,11 +96,13 @@ private:
     vector<vector<EntityType> > m_access_matrix;
     vector<vector<EntityType> > m_explosion_access_matrix;
 
+    int m_vital_space;
 };
 
 
 void World::compute_access_zone(int start_x, int start_y)
 {
+    m_vital_space = 0;
     m_access_matrix.clear();
     m_access_matrix = m_matrix;
     compute_access_zone_rec(start_x, start_y);
@@ -113,6 +120,7 @@ void World::compute_explosion_access_zone(int start_x, int start_y)
 void World::compute_access_zone_rec(int x, int y)
 {
     m_access_matrix[x][y] = EntityMark;
+    m_vital_space++;
     vector<pair<int, int> > around = coords_around(x, y);
     for (auto &coord : around) {
         if (m_access_matrix[coord.first][coord.second] != EntityMark) {
@@ -787,6 +795,18 @@ Target compute_next_target(bool ignore_current_position)
 }
 
 
+int my_bombs()
+{
+    int counter = 0;
+    for (auto &b : g_bombs) {
+        if (b.get_owner() == g_me.id()) {
+            counter++;
+        }
+    }
+    return counter;
+}
+
+
 void game_loop(int width, int height, int my_id)
 {
     Target target;
@@ -843,7 +863,9 @@ void game_loop(int width, int height, int my_id)
             // we have a target
             if (target.location == cur_loc) {
                 cerr << ":debug: we are here" << endl;
-                if (target.type == 0 && g_me.bombs_available()) {
+                if (target.type == 0 &&
+                    (g_me.bombs_available() &&
+                     (my_bombs() == 0  || g_world.vital_space() > 12))) {
                     cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
                     command_executed = true;
                 }
