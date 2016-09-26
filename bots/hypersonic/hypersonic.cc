@@ -55,8 +55,8 @@ public:
      */
     bool is_empty(int x, int y) const
     {
-        // :fixme: - check rules (bombs, other players)
-        return (entity(x, y) != EntityBox && entity(x, y) != EntityWall);
+        return (entity(x, y) != EntityBox && entity(x, y) != EntityWall &&
+                entity(x, y) != EntityBombMine && entity(x, y) != EntityBombEnemy);
     }
 
     void set_world_size(int width, int height)
@@ -99,8 +99,7 @@ void World::compute_access_zone_rec(int x, int y)
     vector<pair<int, int> > around = coords_around(x, y);
     for (auto &coord : around) {
         if (m_access_matrix[coord.first][coord.second] != EntityMark) {
-            if (entity(coord.first, coord.second) != EntityBox &&
-                entity(coord.first, coord.second) != EntityWall) {
+            if (is_empty(coord.first, coord.second)) {
                 compute_access_zone_rec(coord.first, coord.second);
             }
         }
@@ -120,7 +119,7 @@ public:
 
     Player(int type, int x = 0, int y = 0, int bombs_avail = 0)
       : m_type(type), m_x(x), m_y(y), m_bombs_avail(bombs_avail),
-        m_range(0)
+        m_range(0), m_bombs_max(bombs_avail)
     {
     }
 
@@ -142,11 +141,19 @@ public:
         m_y = i2;
         m_bombs_avail = i3;
         m_range = i4;
+        if (m_bombs_avail > m_bombs_max) {
+            m_bombs_max = m_bombs_avail;
+        }
     }
 
     int bombs_available() const
     {
         return m_bombs_avail;
+    }
+
+    int bombs_max() const
+    {
+        return m_bombs_max;
     }
 
     int bomb_range() const
@@ -163,6 +170,8 @@ private:
     int m_y;
 
     int m_bombs_avail;
+
+    int m_bombs_max;
 
     int m_range;
 };
@@ -218,12 +227,14 @@ private:
 World g_world;
 
 Player g_me(0) ;
-Player g_enemy(1); // :fixme: make an array or something
+Player g_enemy(1);
+vector<Bomb> g_my_bombs;
 vector<Bomb> g_enemy_bombs;
 
 void read_data(int width, int height, int my_id)
 {
     g_enemy_bombs.clear();
+    g_my_bombs.clear();
     for (int i = 0; i < height; i++) {
         string row;
         getline(cin, row);
@@ -253,6 +264,7 @@ void read_data(int width, int height, int my_id)
         int param1;
         int param2;
         cin >> entityType >> owner >> x >> y >> param1 >> param2; cin.ignore();
+        //cerr << ":debug: got new entity: " << entityType << endl; // :debug:
         if (entityType == 0) {
             if (owner == my_id) {
                 g_me.set_params(x, y, param1, param2);
@@ -262,6 +274,10 @@ void read_data(int width, int height, int my_id)
         } else if (entityType == 1) {
             if (owner == my_id) {
                 g_world.matrix()[x][y] = EntityBombMine;
+                Bomb b(owner, x, y, param1, param2);
+                g_my_bombs.push_back(b);
+                //cerr << ":debug: my bomb at " << x << ", " << y << " with timer "
+                //     << param1 << " and range " << param2 << endl;
             } else {
                 g_world.matrix()[x][y] = EntityBombEnemy;
                 Bomb b(owner, x, y, param1, param2);
@@ -271,6 +287,7 @@ void read_data(int width, int height, int my_id)
             }
         } else if (entityType == 2) {
             g_world.matrix()[x][y] = EntityGoodie;
+            //cerr << ":debug: goodie at " << x << ", " << y << endl;
         }
     }
 }
@@ -285,13 +302,13 @@ vector<pair<int, int> > coords_around(int x, int y, bool include_center)
     if (x > 0) {
         result.push_back(make_pair(x - 1, y));
     }
-    if (x < g_world.matrix().size() - 2) {
+    if (x <= g_world.matrix().size() - 2) {
         result.push_back(make_pair(x + 1, y));
     }
     if (y > 0) {
         result.push_back(make_pair(x, y - 1));
     }
-    if (y < g_world.matrix()[0].size() - 2) {
+    if (y <= g_world.matrix()[0].size() - 2) {
         result.push_back(make_pair(x, y + 1));
     }
 /*
@@ -362,6 +379,13 @@ struct Target
     bool is_valid() const
     {
         return type != -1;
+    }
+
+    void clear()
+    {
+        location = make_pair(-1, -1);
+        type = -1;
+        cost = 0;
     }
 
     Location location;
@@ -464,14 +488,14 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     // for boxes because they are too far - we want to avoid that
     // On the other hand, if we don't have bombs available, there's no point considering
     // boxes too valuable.
-    cost = boxes * (g_me.bombs_available() ? 25 : 10) - distance;
+    cost = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
     if (distance < 5) {
-        cost += 11;
+        cost += 21;
     }
     target_type = 0;
 
     if (g_world.entity(x, y) == EntityGoodie) {
-        if (g_me.bomb_range() > 5 && g_me.bombs_available() > 1) {
+        if (g_me.bomb_range() >= 5 && g_me.bombs_max() >= 3) {
             cost += 26; // not that important
         } else {
             cost += 76; // important
@@ -540,10 +564,27 @@ bool check_iminent_explosion(Location &ret)
             break;
         }
     }
+    // check if we are close enough
+    bool possible_collision = false;
+    for (auto bomb : g_enemy_bombs) {
+        if (g_world.is_accesible(bomb.get_x(), bomb.get_y())) {
+            possible_collision = true;
+            break;
+        }
+    }
+
+    if (!possible_collision) {
+        return false;
+    }
+
     if (fire_in_the_hole) {
         vector<Location> locations = coords_around(g_me.get_x(), g_me.get_y(), true);
         for (auto &l : locations) {
-            if (g_world.is_empty(l.first, l.second) && location_safe_p(l)) {
+            // if we've just placed a bomb, current location won't be empty
+            // so we need the special condition
+            if ((g_world.is_empty(l.first, l.second) ||
+                 (l.first == g_me.get_x() && l.second == g_me.get_y()))
+                && location_safe_p(l)) {
                 ret = l;
                 break;
             }
@@ -594,37 +635,75 @@ void game_loop(int width, int height, int my_id)
 {
     Target target;
     static bool first = true;
+    static Location previous_loc = make_pair(-1, -1);
     while (1) {
         read_data(width, height, my_id);
         g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
+
+        /*
+        // :debug:
+        for (int i = 0; i < g_world.height(); i++) {
+            for (int j = 0; j < g_world.width(); j++) {
+                if (g_world.is_accesible(j, i)) {
+                    cerr << "O";
+                } else {
+                    cerr << "X";
+                }
+            }
+            cerr << endl;
+        }
+        */
+
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
 
         // first try to protect from explosions
         Location emergency_location;
+        bool emergency_target = false;
         if (check_iminent_explosion(emergency_location)) {
             // preparing for explosion
             if (emergency_location.first != -1) {
                 target.location = emergency_location;
                 target.type = 1;
+                emergency_target = true;
             }
         }
+
+        // check own explosion and look again for target
+        for (auto bomb : g_my_bombs) {
+            if (bomb.timeout() == 1) {
+                // abort the current target
+                target.clear();
+                break;
+            }
+        }
+
+        bool command_executed = false;
         if (target.is_valid()) {
             // we have a target
             if (target.location == cur_loc) {
                 cerr << ":debug: we are here" << endl;
                 if (target.type == 0 && g_me.bombs_available()) {
                     cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
-                } else {
-                    // just stay here
-                    cout << "MOVE " << cur_loc.first << " " << cur_loc.second
-                         << " a" << endl;
+                    command_executed = true;
+                }
+                if (emergency_target) {
+                    // stay
+                    cout << "MOVE " << cur_loc.first << " " << cur_loc.second << endl;
+                    command_executed = true;
                 }
                 target.type = -1;
             } else {
-                cout << "MOVE " << target.location.first << " "
-                     << target.location.second << " b" << endl;
+                if (cur_loc == previous_loc && !emergency_target) {
+                    cerr << "Something is wrong, we cannot move. Abort" << endl;
+                    target.type = -1;
+                } else {
+                    cout << "MOVE " << target.location.first << " "
+                         << target.location.second << " b" << endl;
+                    command_executed = true;
+                }
             }
-        } else {
+        }
+        if (!target.is_valid() && !command_executed) {
             // if not first time, ignore current position
             target = compute_next_target(!first);
             if (target.is_valid()) {
@@ -638,7 +717,8 @@ void game_loop(int width, int height, int my_id)
         if (first) {
             first = false;
         }
-    }
+        previous_loc = cur_loc;
+    } // end while(1)
 }
 
 
