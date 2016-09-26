@@ -627,13 +627,31 @@ bool check_iminent_explosion(Location &ret)
 {
     ret = make_pair(-1, -1);
     bool fire_in_the_hole = false;
-    for (auto bomb : g_enemy_bombs) {
+    for (auto &bomb : g_enemy_bombs) {
         if (bomb.timeout() == 2) {
             fire_in_the_hole = true;
             break;
         }
     }
 
+    // check if we can trigger some enemy bombs
+    // :fixme: just a stupid / simple alg.
+    for (auto &bomb : g_my_bombs) {
+        if (bomb.timeout() == 2) {
+            fire_in_the_hole = true;
+            break;
+        }
+    }
+    if (fire_in_the_hole) {
+        for (auto &my_bomb : g_my_bombs) {
+            for (auto &enemy_bomb : g_enemy_bombs) {
+                if (my_bomb.get_x() == enemy_bomb.get_x() ||
+                    my_bomb.get_y() == enemy_bomb.get_y()) {
+                    fire_in_the_hole = true;
+                }
+            }
+        }
+    }
 
     bool possible_collision = false;
     if (fire_in_the_hole) {
@@ -645,11 +663,10 @@ bool check_iminent_explosion(Location &ret)
                 break;
             }
         }
-    }
-
-    if (!possible_collision) {
-        cerr << ":debug: no possible collision" << endl;
-        return false;
+        if (!possible_collision) {
+            cerr << ":debug: no possible collision" << endl;
+            return false;
+        }
     }
 
     if (fire_in_the_hole) {
@@ -744,10 +761,15 @@ void game_loop(int width, int height, int my_id)
         }
 
         // check own explosion and look again for target
+        static bool search_again = false;
+        if (search_again) {
+            target.clear();
+            search_again = false;
+        }
         for (auto bomb : g_my_bombs) {
             if (bomb.timeout() == 1) {
-                // abort the current target
-                target.clear();
+                // next turn abort the current target
+                search_again = true;
                 break;
             }
         }
