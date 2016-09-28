@@ -3,13 +3,14 @@
 #include <vector>
 #include <algorithm>
 #include <utility>
+#include <deque>
+#include <sstream>
+
+// uncomment to have more debug info (useful for unit tests)
+//#define DEBUG_LOCAL
 
 using namespace std;
 
-using Location = pair<int, int>;
-
-
-static vector<pair<int, int> > coords_around(int x, int y, bool include_center = false);
 
 enum EntityType
 {
@@ -22,10 +23,28 @@ enum EntityType
     EntityGoodie
 };
 
+using Location = pair<int, int>;
+
+class World;
+class Player;
+class Bomb;
+
+static vector<pair<int, int> > coords_around(int x, int y, bool include_center = false);
+
+static vector<pair<int, int> > coords_around_2(int x, int y, bool include_center = false);
+
+static bool location_safe_for_bomb_p(const Location &loc, const Bomb &b);
+
+
 
 class World
 {
 public:
+
+    World(int width = 1, int height = 1)
+    {
+        set_world_size(width, height);
+    }
 
     /**
      * This is to avoid changing a lot of code.
@@ -70,92 +89,61 @@ public:
         for (int i = 0; i < width; i++) {
             m_matrix[i].resize(height);
         }
+        m_explosion_matrix.resize(width);
+        for (int i = 0; i < width; i++) {
+            m_explosion_matrix[i].resize(height);
+        }
     }
 
     /**
      * Determines what cells are accesible.
      */
     void compute_access_zone(int start_x, int start_y);
-    void compute_explosion_access_zone(int start_x, int start_y);
+
+    void compute_explosion_zone(vector<Bomb> &world_bombs);
 
     bool is_accesible(int x, int y) const;
 
-    bool is_explosion_accesible(int x, int y) const;
+    /**
+     * @return no. of turns till this cell will explode.
+     */
+    int get_explosion_timeout(int x, int y) const;
 
     int vital_space() const
     {
         return m_vital_space;
     }
 
+    bool location_valid_p(int x, int y) const
+    {
+        return (x >= 0 && x < width() && y >= 0 && y < height());
+    }
+
+    // debug / test functions
+    void print_explosion_matrix() const
+    {
+        for (int i = 0; i < width(); i++) {
+            for (int j = 0; j < height(); j++) {
+                cerr << m_explosion_matrix[i][j];
+            }
+            cerr << endl;
+        }
+    }
+
 private:
 
     void compute_access_zone_rec(int x, int y);
+
+    /*
     void compute_explosion_access_zone_rec(int x, int y);
+    */
 
     vector<vector<EntityType> > m_matrix;
     vector<vector<EntityType> > m_access_matrix;
-    vector<vector<EntityType> > m_explosion_access_matrix;
+    vector<vector<int> > m_explosion_matrix;
 
     int m_vital_space;
 };
-
-
-void World::compute_access_zone(int start_x, int start_y)
-{
-    m_vital_space = 0;
-    m_access_matrix.clear();
-    m_access_matrix = m_matrix;
-    compute_access_zone_rec(start_x, start_y);
-}
-
-
-void World::compute_explosion_access_zone(int start_x, int start_y)
-{
-    m_explosion_access_matrix.clear();
-    m_explosion_access_matrix = m_matrix;
-    compute_explosion_access_zone_rec(start_x, start_y);
-}
-
-
-void World::compute_access_zone_rec(int x, int y)
-{
-    m_access_matrix[x][y] = EntityMark;
-    m_vital_space++;
-    vector<pair<int, int> > around = coords_around(x, y);
-    for (auto &coord : around) {
-        if (m_access_matrix[coord.first][coord.second] != EntityMark) {
-            if (is_empty(coord.first, coord.second)) {
-                compute_access_zone_rec(coord.first, coord.second);
-            }
-        }
-    }
-}
-
-
-void World::compute_explosion_access_zone_rec(int x, int y)
-{
-    m_explosion_access_matrix[x][y] = EntityMark;
-    vector<pair<int, int> > around = coords_around(x, y);
-    for (auto &coord : around) {
-        if (m_explosion_access_matrix[coord.first][coord.second] != EntityMark) {
-            if (is_empty_or_bomb(coord.first, coord.second)) {
-                compute_explosion_access_zone_rec(coord.first, coord.second);
-            }
-        }
-    }
-}
-
-
-bool World::is_accesible(int x, int y) const
-{
-    return m_access_matrix[x][y] == EntityMark;
-}
-
-
-bool World::is_explosion_accesible(int x, int y) const
-{
-    return m_explosion_access_matrix[x][y] == EntityMark;
-}
 
 
 class Player
@@ -233,11 +221,12 @@ class Bomb
 public:
 
     Bomb()
+      : m_x(-1), m_y(-1)
     {};
 
     Bomb(int owner, int x, int y, int time_remaining, int range = 3)
       : m_owner(owner), m_x(x), m_y(y), m_time_remaining(time_remaining),
-        m_range(range)
+        m_range(range), m_effective_timeout(time_remaining)
     {
     }
 
@@ -251,6 +240,7 @@ public:
         return m_y;
     }
 
+    /*
     void set_params(int i1, int i2, int i3, int i4)
     {
         m_x = i1;
@@ -258,6 +248,7 @@ public:
         m_owner = i3;
         m_range = i4;
     }
+    */
 
     int timeout() const
     {
@@ -274,6 +265,27 @@ public:
         return m_owner;
     }
 
+    vector<Location> get_explosion_area(const World &world);
+
+    void set_effective_timeout(int timeout)
+    {
+        m_effective_timeout = timeout;
+    }
+
+    int effective_timeout() const
+    {
+        return m_effective_timeout;
+    }
+
+    string description() const
+    {
+        ostringstream ostr;
+        ostr << "Bomb: loc(" << m_x << "," << m_y << "), owner=" << m_owner
+             <<  ", range=" << m_range << ", time_remaining=" << m_time_remaining
+             << ", m_effective_time=" << m_effective_timeout << endl;
+        return ostr.str();
+    }
+
 private:
 
     int m_owner;
@@ -284,17 +296,204 @@ private:
 
     int m_time_remaining;
 
+    int m_effective_timeout;
+
     int m_range;
 };
-
-
-static bool location_safe_for_bomb_p(const Location &loc, const Bomb &b);
 
 
 World g_world;
 
 Player g_me;
+
 vector<Bomb> g_bombs;
+
+
+//// start class implementations
+
+void World::compute_access_zone(int start_x, int start_y)
+{
+    m_vital_space = 0;
+    m_access_matrix.clear();
+    m_access_matrix = m_matrix;
+    compute_access_zone_rec(start_x, start_y);
+}
+
+
+void World::compute_access_zone_rec(int x, int y)
+{
+    m_access_matrix[x][y] = EntityMark;
+    m_vital_space++;
+    vector<pair<int, int> > around = coords_around(x, y);
+    for (auto &coord : around) {
+        if (m_access_matrix[coord.first][coord.second] != EntityMark) {
+            if (is_empty(coord.first, coord.second)) {
+                compute_access_zone_rec(coord.first, coord.second);
+            }
+        }
+    }
+}
+
+
+int World::get_explosion_timeout(int x, int y) const
+{
+    return m_explosion_matrix[x][y];
+}
+
+
+Bomb& find_bomb_with_coords(vector<Bomb> &bombs, int x, int y)
+{
+    for (Bomb &bomb : bombs) {
+        if (bomb.get_x() == x && bomb.get_y() == y) {
+            return bomb;
+        }
+    }
+    // we shouldn't be here
+    throw string("Cannot find bomb with the specified coords");
+}
+
+
+/**
+ * Computes a matrix containing explosion times for every cell.
+ */
+void World::compute_explosion_zone(vector<Bomb> &world_bombs)
+{
+    // clear matrix (:fixme: optimize)
+    for (int i = 0; i < width(); i++) {
+        for (int j = 0; j < height(); j++) {
+            m_explosion_matrix[i][j] = 9;
+        }
+    }
+    deque<Bomb> bombs;
+    // copy to deque
+    for (auto &bomb : world_bombs) {
+        bombs.push_back(bomb);
+    }
+    while (!bombs.empty()) {
+        Bomb &bomb = bombs.front();
+        bombs.pop_front();
+        vector<Location> locations = bomb.get_explosion_area(*this);
+        for (Location &loc : locations) {
+            int xx = loc.first;
+            int yy = loc.second;
+            if (m_explosion_matrix[xx][yy] > bomb.effective_timeout()) {
+                m_explosion_matrix[xx][yy] = bomb.effective_timeout();
+            }
+            if (bomb.get_x() != xx || bomb.get_y() != yy) {
+                // don't check the same bomb
+                if (entity(xx, yy) == EntityBombEnemy) {
+                    Bomb &other_bomb = find_bomb_with_coords(world_bombs, xx, yy);
+#ifdef DEBUG_LOCAL
+                    cerr << ":debug: found a new bomb on path: "
+                         << other_bomb.description() << endl;
+#endif
+                    if (bomb.effective_timeout() < other_bomb.effective_timeout()) {
+                            other_bomb.set_effective_timeout(bomb.effective_timeout());
+                            bombs.push_back(other_bomb);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+bool World::is_accesible(int x, int y) const
+{
+    return m_access_matrix[x][y] == EntityMark;
+}
+
+
+/*
+bool World::is_explosion_accesible(int x, int y) const
+{
+    return m_explosion_access_matrix[x][y] == EntityMark;
+}
+*/
+
+
+/**
+ * Pure functional.
+ */
+vector<Location> Bomb::get_explosion_area(const World &world)
+{
+    // :fixme: players are also obsacles
+    vector<Location> expl_area;
+
+    expl_area.push_back(make_pair(get_x(), get_y()));
+    for (int i = 1; i < get_range(); i++) {
+        int xx = get_x() + i;
+        int yy = get_y();
+        if (world.location_valid_p(xx, yy)) {
+            EntityType e = world.entity(xx, yy);
+            expl_area.push_back(make_pair(xx, yy));
+            if (e == EntityBox || e == EntityWall || e == EntityGoodie) {
+                break;
+            }
+        }
+    }
+    for (int i = 1; i < get_range(); i++) {
+        int xx = get_x() - i;
+        int yy = get_y();
+        if (world.location_valid_p(xx, yy)) {
+            EntityType e = world.entity(xx, yy);
+            expl_area.push_back(make_pair(xx, yy));
+            if (e == EntityBox || e == EntityWall || e == EntityGoodie) {
+                break;
+            }
+        }
+    }
+    for (int i = 1; i < get_range(); i++) {
+        int xx = get_x();
+        int yy = get_y() + i;
+        if (world.location_valid_p(xx, yy)) {
+            EntityType e = world.entity(xx, yy);
+            expl_area.push_back(make_pair(xx, yy));
+            if (e == EntityBox || e == EntityWall || e == EntityGoodie) {
+                break;
+            }
+        }
+    }
+    for (int i = 1; i < get_range(); i++) {
+        int xx = get_x();
+        int yy = get_y() - i;
+        if (world.location_valid_p(xx, yy)) {
+            EntityType e = world.entity(xx, yy);
+            expl_area.push_back(make_pair(xx, yy));
+            if (e == EntityBox || e == EntityWall || e == EntityGoodie) {
+                break;
+            }
+        }
+    }
+#ifdef DEBUG_LOCAL
+    cerr << ":debug: explosion area for bomb(" << get_x() << ", " << get_y() << ")" << endl;
+    cerr << ":debug: ";
+    for (auto &loc : expl_area) {
+        cerr << "(" << loc.first << "," << loc.second << ") ";
+    }
+    cerr << endl;
+#endif
+
+    return expl_area;
+}
+
+// make a function from this
+        /*
+        // :debug:
+        for (int i = 0; i < g_world.height(); i++) {
+            for (int j = 0; j < g_world.width(); j++) {
+                if (g_world.is_accesible(j, i)) {
+                    cerr << "O";
+                } else {
+                    cerr << "X";
+                }
+            }
+            cerr << endl;
+        }
+        */
+
+
+//// end class implementations
 
 void read_data(int width, int height, int my_id)
 {
@@ -372,6 +571,23 @@ vector<pair<int, int> > coords_around(int x, int y, bool include_center)
     }
     cerr << endl;
 */
+    return result;
+}
+
+
+/**
+ * :fixme: there will be duplicates and it definitely can be improved.
+ */
+vector<pair<int, int> > coords_around_2(int x, int y, bool include_center)
+{
+    vector<Location> result;
+    result = coords_around(x, y, include_center);
+    vector<Location> extra_cells;
+    for (auto &loc : result) {
+        vector<Location> v = coords_around(loc.first, loc.second, false);
+        extra_cells.insert(extra_cells.end(), v.begin(), v.end());
+    }
+    result.insert(result.end(), extra_cells.begin(), extra_cells.end());
     return result;
 }
 
@@ -471,6 +687,9 @@ int distance_between(const Location &loc1, const Location &loc2)
 }
 
 
+/**
+ * :fixme: move to World class
+ */
 bool location_valid_p(int x, int y)
 {
     return (x >= 0 && x < g_world.width() && y >= 0 && y < g_world.height());
@@ -679,51 +898,24 @@ bool check_iminent_explosion(Location &ret)
     bool fire_in_the_hole = false;
     Bomb detonating_bomb;
     for (auto &bomb : g_bombs) {
-        if (bomb.timeout() == 2) {
+        if (bomb.timeout() == 2 || bomb.timeout() == 3) {
             fire_in_the_hole = true;
-            detonating_bomb = bomb;
+            g_world.compute_explosion_zone(g_bombs);
             break;
         }
     }
 
-    // check if it's not my bomb
     if (fire_in_the_hole) {
-        if (detonating_bomb.get_owner() != g_me.id()) {
-            g_world.compute_explosion_access_zone(g_me.get_x(), g_me.get_y());
-            if (!g_world.is_explosion_accesible(detonating_bomb.get_x(),
-                                                detonating_bomb.get_y())) {
-                cerr << ":debug: explosion not mine and far away" << endl;
-                return false;
-            }
-        }
-    }
-
-    if (fire_in_the_hole) {
-        vector<Location> locations = coords_around(g_me.get_x(), g_me.get_y(), true);
+        vector<Location> locations = coords_around_2(g_me.get_x(), g_me.get_y(), true);
         for (auto &l : locations) {
             // if we've just placed a bomb, current location won't be empty
             // so we need the special condition
             if ((g_world.is_empty(l.first, l.second) ||
                  (l.first == g_me.get_x() && l.second == g_me.get_y()))
-                && location_safe_p(l)) {
+                && g_world.is_accesible(l.first, l.second)
+                && g_world.get_explosion_timeout(l.first, l.second) > 3) {
                 ret = l;
                 break;
-            }
-        }
-
-        if (ret.first == -1) {
-            // if we couldn't find a safe location, try at least to find a safe location for
-            // the bomb that is going to detonate
-            vector<Location> locations = coords_around(g_me.get_x(), g_me.get_y(), true);
-            for (auto &l : locations) {
-                // if we've just placed a bomb, current location won't be empty
-                // so we need the special condition
-                if ((g_world.is_empty(l.first, l.second) ||
-                     (l.first == g_me.get_x() && l.second == g_me.get_y()))
-                    && location_safe_for_bomb_p(l, detonating_bomb)) {
-                    ret = l;
-                    break;
-                }
             }
         }
 
@@ -816,20 +1008,6 @@ void game_loop(int width, int height, int my_id)
         read_data(width, height, my_id);
         g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
 
-        /*
-        // :debug:
-        for (int i = 0; i < g_world.height(); i++) {
-            for (int j = 0; j < g_world.width(); j++) {
-                if (g_world.is_accesible(j, i)) {
-                    cerr << "O";
-                } else {
-                    cerr << "X";
-                }
-            }
-            cerr << endl;
-        }
-        */
-
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
 
         // first try to protect from explosions
@@ -846,7 +1024,7 @@ void game_loop(int width, int height, int my_id)
 
         // check own explosion and look again for target
         static bool search_again = false;
-        if (search_again) {
+        if (search_again && !emergency_target) {
             target.clear();
             search_again = false;
         }
@@ -905,6 +1083,10 @@ void game_loop(int width, int height, int my_id)
 }
 
 
+// unit tests declarations
+void test1();
+
+
 /**
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
@@ -920,4 +1102,27 @@ int main()
     g_world.set_world_size(width, height);
 
     game_loop(width, height, myId);
+
+    //  Unit tests.
+    /*
+    test1();
+    */
+}
+
+
+// unit tests
+
+void test1()
+{
+    World world(8, 8);
+    vector<Bomb> bombs;
+
+    bombs.push_back(Bomb(0, 2, 2, 8));
+    world.matrix()[2][2] = EntityBombEnemy;
+
+    bombs.push_back(Bomb(0, 2, 0, 3));
+    world.matrix()[2][0] = EntityBombEnemy;
+
+    world.compute_explosion_zone(bombs);
+    world.print_explosion_matrix();
 }
