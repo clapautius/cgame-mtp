@@ -93,6 +93,10 @@ public:
         for (int i = 0; i < width; i++) {
             m_explosion_matrix[i].resize(height);
         }
+        m_explosion_access_matrix.resize(width);
+        for (int i = 0; i < width; i++) {
+            m_explosion_access_matrix[i].resize(height);
+        }
     }
 
     /**
@@ -100,9 +104,13 @@ public:
      */
     void compute_access_zone(int start_x, int start_y);
 
-    void compute_explosion_zone(vector<Bomb> &world_bombs);
+    void compute_explosion_access_zone(int start_x, int start_y);
+
+    void compute_explosions(vector<Bomb> &world_bombs);
 
     bool is_accesible(int x, int y) const;
+
+    bool is_explosion_accesible(int x, int y) const;
 
     /**
      * @return no. of turns till this cell will explode.
@@ -134,12 +142,11 @@ private:
 
     void compute_access_zone_rec(int x, int y);
 
-    /*
-    void compute_explosion_access_zone_rec(int x, int y);
-    */
+    void compute_explosion_access_zone_rec(int start_x, int start_y);
 
     vector<vector<EntityType> > m_matrix;
     vector<vector<EntityType> > m_access_matrix;
+    vector<vector<EntityType> > m_explosion_access_matrix;
     vector<vector<int> > m_explosion_matrix;
 
     int m_vital_space;
@@ -320,6 +327,14 @@ void World::compute_access_zone(int start_x, int start_y)
 }
 
 
+void World::compute_explosion_access_zone(int start_x, int start_y)
+{
+    m_explosion_access_matrix.clear();
+    m_explosion_access_matrix = m_matrix;
+    compute_explosion_access_zone_rec(start_x, start_y);
+}
+
+
 void World::compute_access_zone_rec(int x, int y)
 {
     m_access_matrix[x][y] = EntityMark;
@@ -329,6 +344,20 @@ void World::compute_access_zone_rec(int x, int y)
         if (m_access_matrix[coord.first][coord.second] != EntityMark) {
             if (is_empty(coord.first, coord.second)) {
                 compute_access_zone_rec(coord.first, coord.second);
+            }
+        }
+    }
+}
+
+
+void World::compute_explosion_access_zone_rec(int x, int y)
+{
+    m_explosion_access_matrix[x][y] = EntityMark;
+    vector<pair<int, int> > around = coords_around(x, y);
+    for (auto &coord : around) {
+        if (m_explosion_access_matrix[coord.first][coord.second] != EntityMark) {
+            if (is_empty_or_bomb(coord.first, coord.second)) {
+                compute_explosion_access_zone_rec(coord.first, coord.second);
             }
         }
     }
@@ -356,7 +385,7 @@ Bomb& find_bomb_with_coords(vector<Bomb> &bombs, int x, int y)
 /**
  * Computes a matrix containing explosion times for every cell.
  */
-void World::compute_explosion_zone(vector<Bomb> &world_bombs)
+void World::compute_explosions(vector<Bomb> &world_bombs)
 {
     // clear matrix (:fixme: optimize)
     for (int i = 0; i < width(); i++) {
@@ -404,12 +433,10 @@ bool World::is_accesible(int x, int y) const
 }
 
 
-/*
 bool World::is_explosion_accesible(int x, int y) const
 {
     return m_explosion_access_matrix[x][y] == EntityMark;
 }
-*/
 
 
 /**
@@ -777,6 +804,9 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     if (distance < 5) {
         cost += 21;
     }
+    if (distance >= 10) {
+        cost -= 25;
+    }
     target_type = 0;
 
     // bomb near location (range = 1)
@@ -899,9 +929,19 @@ bool check_iminent_explosion(Location &ret)
     Bomb detonating_bomb;
     for (auto &bomb : g_bombs) {
         if (bomb.timeout() == 2 || bomb.timeout() == 3) {
-            fire_in_the_hole = true;
-            g_world.compute_explosion_zone(g_bombs);
-            break;
+            bool bomb_is_mine = (bomb.get_owner() == g_me.id());
+            if (!bomb_is_mine) {
+                g_world.compute_explosion_access_zone(g_me.get_x(), g_me.get_y());
+            }
+            if (bomb_is_mine ||
+                g_world.is_explosion_accesible(bomb.get_x(), bomb.get_y())) {
+                fire_in_the_hole = true;
+                g_world.compute_explosions(g_bombs);
+                break;
+            } else {
+                cerr << ":debug: bomb " << bomb.description()
+                     << " is not accesible" << endl;
+            }
         }
     }
 
@@ -1123,6 +1163,6 @@ void test1()
     bombs.push_back(Bomb(0, 2, 0, 3));
     world.matrix()[2][0] = EntityBombEnemy;
 
-    world.compute_explosion_zone(bombs);
+    world.compute_explosions(bombs);
     world.print_explosion_matrix();
 }
