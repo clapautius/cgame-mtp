@@ -9,6 +9,11 @@ using namespace std;
 // uncomment to get lots of debug messages on cerr
 //#define DEBUG
 
+static const int k_recommended_distance = 6200;
+static const int k_safe_distance_1 = 3500;
+static const int k_safe_distance_2 = 3000;
+
+
 bool unit_tests();
 
 //
@@ -166,9 +171,6 @@ int distance(A a, B b)
     return static_cast<int>(sqrt(xx * xx + yy * yy));
 }
 
-static const int k_safe_distance_1 = 3500;
-static const int k_safe_distance_2 = 3000;
-
 bool location_is_valid_p(const Location &loc)
 {
     return (loc.x() >= 0 && loc.x() < 16000 &&
@@ -267,15 +269,23 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
     if(!run_away_if_needed(me, enemies)) {
         int min_distance = 100000;
         int min_id = -1;
+        Location min_loc;
         for (auto &enemy : enemies) {
             int d = distance(me, enemy);
             if (d < min_distance) {
                 min_distance = d;
                 min_id = enemy.id();
+                min_loc.set_x(enemy.x());
+                min_loc.set_y(enemy.y());
             }
         }
         if (min_id >= 0) {
-            cout << "SHOOT " << min_id << endl;
+            if (min_distance >= k_recommended_distance) {
+                // too far away
+                cout << "MOVE " << min_loc.x() << " " << min_loc.y() << endl;
+            } else {
+                cout << "SHOOT " << min_id << endl;
+            }
         } else {
             // just stay there
             cout << "MOVE " << me.x() << " " << me.y() << endl;
