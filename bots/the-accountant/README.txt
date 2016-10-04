@@ -103,3 +103,7 @@ Constraints
 
 1 ≤ enemyLife < 150
 Response time per game turn ≤ 100ms
+
+__________
+
+2016-10-04 (first version): Best score 5218, 100%, Rank 170 / 1,035
