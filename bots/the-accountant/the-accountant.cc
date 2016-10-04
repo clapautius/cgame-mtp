@@ -10,9 +10,12 @@ using namespace std;
 // uncomment to get lots of debug messages on cerr
 //#define DEBUG
 
-static int g_recommended_distance = 6200;
+static const int k_recommended_distance_more = 6200;
+static const int k_recommended_distance_one = 5000;
 static const int k_safe_distance = 3000;
-static const int k_enemy_distance = 4000;
+static const int k_enemy_distance = 3800;
+
+static int g_recommended_distance = k_recommended_distance_more;
 
 
 bool unit_tests();
@@ -162,7 +165,7 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
         enemies.push_back(e);
     }
     if (enemies.size() == 1) {
-        g_recommended_distance = 5000;
+        g_recommended_distance = k_recommended_distance_one;
     }
 }
 
