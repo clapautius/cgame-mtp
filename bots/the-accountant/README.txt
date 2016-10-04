@@ -108,3 +108,4 @@ __________
 
 2016-10-04-0 (first version): Best score 5218, 100%, Rank 170 / 1,035
 2016-10-04-1: Best score 8060, 100%, Rank 142 / 1,045
+2016-10-04-2: 8344 but some validators fail.
