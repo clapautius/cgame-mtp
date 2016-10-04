@@ -3,15 +3,16 @@
 #include <vector>
 #include <algorithm>
 #include <sstream>
+#include <functional>
 
 using namespace std;
 
 // uncomment to get lots of debug messages on cerr
 //#define DEBUG
 
-static const int k_recommended_distance = 6200;
-static const int k_safe_distance_1 = 3000;
-static const int k_safe_distance_2 = 3000;
+static int g_recommended_distance = 6200;
+static const int k_safe_distance = 3000;
+static const int k_enemy_distance = 4000;
 
 
 bool unit_tests();
@@ -160,6 +161,9 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
         Enemy e(enemyId, enemyX, enemyY, enemyLife);
         enemies.push_back(e);
     }
+    if (enemies.size() == 1) {
+        g_recommended_distance = 5000;
+    }
 }
 
 
@@ -170,6 +174,20 @@ int distance(A a, B b)
     double yy = abs(a.y() - b.y());
     return static_cast<int>(sqrt(xx * xx + yy * yy));
 }
+
+
+template<class C>
+int count_if(function<bool(const C&)> predicate, vector<C> &sequence)
+{
+    int ret = 0;
+    for (auto &item : sequence) {
+        if (predicate(item)) {
+            ++ret;
+        }
+    }
+    return ret;
+}
+
 
 bool location_is_valid_p(const Location &loc)
 {
@@ -222,11 +240,10 @@ int get_min_distance_to_enemies(const Location &loc, const vector<Enemy> &enemie
 /**
  * @return true if we moved (to escape some enemies)
  */
-bool run_away_if_needed(Location &me, vector<Enemy> &enemies, bool &in_danger)
+bool run_away_if_needed(Location &me, vector<Enemy> &enemies)
 {
-    if (!location_is_safe_p(me, enemies, k_safe_distance_1)) {
+    if (!location_is_safe_p(me, enemies, k_safe_distance)) {
         // check north, south, east, west
-        in_danger = true;
         Location potential_loc(me.x(), me.y());
         bool found = false;
         cerr << ":debug: we are in danger" << endl;
@@ -246,7 +263,7 @@ bool run_away_if_needed(Location &me, vector<Enemy> &enemies, bool &in_danger)
             potential_loc.set_x(me.x() + loc.first);
             potential_loc.set_y(me.y() + loc.second);
             if (location_is_valid_p(potential_loc)
-                && location_is_safe_p(potential_loc, enemies, k_safe_distance_2)) {
+                && location_is_safe_p(potential_loc, enemies, k_safe_distance)) {
                 int distance = get_min_distance_to_enemies(potential_loc, enemies);
                 if (distance > best_distance) {
                     best_distance = distance;
@@ -264,7 +281,6 @@ bool run_away_if_needed(Location &me, vector<Enemy> &enemies, bool &in_danger)
             return false; // :fixme: we are in danger but couldn't find a safe location
         }
     } else {
-        in_danger = false;
         return false;
     }
 }
@@ -286,7 +302,7 @@ void strategy1(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
         }
     }
     if (min_id >= 0) {
-        if (min_distance >= k_recommended_distance) {
+        if (min_distance >= g_recommended_distance) {
             // too far away
             cout << "MOVE " << min_loc.x() << " " << min_loc.y() << endl;
         } else {
@@ -316,7 +332,7 @@ void strategy2(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
         }
     }
     if (min_id >= 0) {
-        if (distance(me, target) >= k_recommended_distance) {
+        if (distance(me, target) >= g_recommended_distance) {
             // too far away
             cout << "MOVE " << target.x() << " " << target.y() << endl;
         } else {
@@ -329,11 +345,38 @@ void strategy2(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
 }
 
 
+/**
+ * @return the number of enemies near me.
+ */
+int enemies_around(Location &me, vector<Enemy> &enemies, int radius)
+{
+    return count_if<Enemy>(
+      [&] (const Enemy &e) -> bool
+        { return (distance(me, e) <= radius); },
+      enemies);
+}
+
+
 void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
 {
     // First run if enemy is close
     bool close_strategy = false;
-    if(!run_away_if_needed(me, enemies, close_strategy)) {
+    bool command_executed = false;
+    int enemies_around_me = enemies_around(me, enemies, k_enemy_distance);
+    int enemies_near_me = enemies_around(me, enemies, k_safe_distance);
+    if (enemies_around_me == 1) {
+        cerr << ":debug: one enemy around - close fight" << endl;
+        close_strategy = true;
+        if (enemies_near_me) {
+            command_executed = run_away_if_needed(me, enemies);
+        }
+    } else if (enemies_around_me > 1 || enemies_near_me >= 1) {
+        cerr << ":debug: more enemies around - fight or flight" << endl;
+        close_strategy = true;
+        command_executed = run_away_if_needed(me, enemies);
+    }
+
+    if(!command_executed) {
         if (close_strategy) {
             strategy1(me, points, enemies);
         } else {

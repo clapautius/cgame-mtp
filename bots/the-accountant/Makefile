@@ -1,11 +1,14 @@
 all: tst.exe tests clipboard
 
 tst.exe : the-accountant.cc
-	g++.exe -ggdb -std=c++11 -o tst.exe the-accountant.cc
+	g++ -ggdb -std=c++11 -o tst.exe the-accountant.cc
 
 tests:
 	./tst.exe --tests
 
-# this works only for windoze
+
+# for windoze
+#cat the-accountant.cc | clip
+# for linux
 clipboard:
-	cat the-accountant.cc | clip
+	cat the-accountant.cc | xclip -selection clipboard -display ":0"
