@@ -556,7 +556,6 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
             }
         }
     }
-
 }
 
 
@@ -650,5 +649,13 @@ bool unit_tests()
     Location l1(0, 0);
     Location l2(2, 0);
     TEST_EQ(distance(l1, l2), 2);
+
+    Location l3(15900,7100);
+    Location l4(13545,8091);
+    TEST_EQ(distance(l3, l4), 2555);
+
+    vector<int> v = { 0, 7, -1, 3};
+    TEST_EQ(count_if<int>([] (int i) -> bool { return i < 0; }, v), 1);
+
     return true;
 }
