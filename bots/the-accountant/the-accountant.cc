@@ -10,14 +10,14 @@ using namespace std;
 // uncomment to get lots of debug messages on cerr
 //#define DEBUG
 
-static const int k_recommended_distance_more = 6000;
-static const int k_recommended_distance_one = 4000;
-static const int k_safe_distance = 3000;
-static const int k_enemy_distance = 3500;
-static const int k_distance_between_enemies = 3000;
-static const int k_runaway_step = 1000;
-
-static int g_recommended_distance = k_recommended_distance_more;
+// !!
+static const int k_recommended_distance_more = 63200;
+static const int k_recommended_distance_one = 30900;
+static const int k_recommended_distance_strong = 30900;
+static const int k_safe_distance = 31000;
+static const int k_enemy_distance = 33500;
+static const int k_distance_between_enemies = 30000;
+static const int k_runaway_step = 11000;
 
 
 bool unit_tests();
@@ -127,6 +127,11 @@ public:
     int distance_to_point() const
     {
         return m_distance_to_point;
+    }
+
+    int life() const
+    {
+        return m_life;
     }
 
 private:
@@ -343,9 +348,32 @@ int get_min_distance_to_enemies(const Location &loc, const vector<Enemy> &enemie
 }
 
 
-void attack_enemy(const Location &me, const Enemy &target)
+int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int no_enemies)
 {
-    if (distance(me, target) >= g_recommended_distance) {
+    int rc = k_recommended_distance_more;
+    if (enemy.life() <= 5) {
+        rc = 100000;
+    } else if (enemy.life() <= 25) {
+        if (no_enemies == 1) {
+            if (enemy.distance_to_point() <= 1000) {
+                // don't waste time moving if it's too close, just shoot
+                rc = k_recommended_distance_more;
+            } else {
+                rc = k_recommended_distance_one;
+            }
+        } else {
+            rc = k_recommended_distance_more;
+        }
+    } else {
+        rc = k_recommended_distance_strong;
+    }
+    return rc;
+}
+
+
+void attack_enemy(const Location &me, const Enemy &target, int no_enemies)
+{
+    if (distance(me, target) > recommended_distance_for_enemy(me, target, no_enemies)) {
         // too far away
         cout << "MOVE " << target.x() << " " << target.y() << endl;
     } else {
@@ -422,12 +450,8 @@ void strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
     }
     if (min_id >= 0) {
         g_current_target_id = min_id;
-        if (min_distance >= g_recommended_distance) {
-            // too far away
-            cout << "MOVE " << min_loc.x() << " " << min_loc.y() << endl;
-        } else {
-            cout << "SHOOT " << min_id << endl;
-        }
+        // :fixme: check result of get_enemy_by_id
+        attack_enemy(me, get_enemy_by_id(enemies, min_id), enemies.size());
     } else {
         // just stay there
         cout << "MOVE " << me.x() << " " << me.y() << endl;
@@ -454,7 +478,7 @@ bool strategy_kill_closest_to_point(Location &me, vector<DataPoint> &points,
         }
     }
     if (min_id >= 0) {
-        attack_enemy(me, target);
+        attack_enemy(me, target, enemies.size());
         return true;
     }
     return false;
@@ -493,7 +517,7 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
 
     bool attacked = false;
     cerr << ":debug: most dangerous: " << enemies[0].to_str() << endl;
-    attack_enemy(me, enemies[0]);
+    attack_enemy(me, enemies[0], enemies.size());
     attacked = true;
     return attacked;
 }
@@ -533,12 +557,6 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
         }
     }
 
-    if (enemies.size() == 1) {
-        if (enemies[0].distance_to_point() > 1000) {
-            // don't waste time moving if it's too close, just shoot
-            g_recommended_distance = k_recommended_distance_one;
-        }
-    }
 }
 
 
@@ -580,7 +598,7 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
     if (!command_executed && g_current_target_id >= 0) {
         const Enemy &enemy = get_enemy_by_id(enemies, g_current_target_id);
         if (enemy.is_valid()) {
-            attack_enemy(me, enemy);
+            attack_enemy(me, enemy, enemies.size());
             command_executed = true;
         } else {
             g_current_target_id = -1;

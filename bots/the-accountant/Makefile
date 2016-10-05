@@ -7,8 +7,8 @@ tests:
 	./tst.exe --tests
 
 # for windoze
-#cat the-accountant.cc | clip
+#	cat the-accountant.cc | clip
 # for linux
 #	cat the-accountant.cc | xclip -selection clipboard -display ":0"
 clipboard:
-	cat the-accountant.cc | clip
+	cat the-accountant.cc | xclip -selection clipboard -display ":0"
