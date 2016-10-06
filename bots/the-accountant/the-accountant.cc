@@ -1,23 +1,15 @@
 #include <iostream>
 #include <string>
-#include <vector>
 #include <algorithm>
 #include <sstream>
-#include <functional>
+
+#include "params.h" // :grep-out:
+#include "cgame-common.h" // :grep-out:
 
 using namespace std;
 
 // uncomment to get lots of debug messages on cerr
 //#define DEBUG
-
-// !!
-static const int k_recommended_distance_more = 63200;
-static const int k_recommended_distance_one = 30900;
-static const int k_recommended_distance_strong = 30900;
-static const int k_safe_distance = 31000;
-static const int k_enemy_distance = 33500;
-static const int k_distance_between_enemies = 30000;
-static const int k_runaway_step = 11000;
 
 
 bool unit_tests();
@@ -255,28 +247,6 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
 }
 
 
-template<class A, class B>
-int distance(A a, B b)
-{
-    double xx = abs(a.x() - b.x());
-    double yy = abs(a.y() - b.y());
-    return static_cast<int>(sqrt(xx * xx + yy * yy));
-}
-
-
-template<class C>
-int count_if(function<bool(const C&)> predicate, vector<C> &sequence)
-{
-    int ret = 0;
-    for (auto &item : sequence) {
-        if (predicate(item)) {
-            ++ret;
-        }
-    }
-    return ret;
-}
-
-
 const Enemy& get_enemy_by_id(const vector<Enemy> &enemies, int id)
 {
     for (auto &enemy : enemies) {
@@ -387,21 +357,24 @@ void attack_enemy(const Location &me, const Enemy &target, int no_enemies)
  */
 bool run_away_if_needed(Location &me, vector<Enemy> &enemies)
 {
-    if (!location_is_safe_p(me, enemies, k_safe_distance)) {
-        // check north, south, east, west
-        Location potential_loc(me.x(), me.y());
-        cerr << ":debug: we are in danger" << endl;
-        vector<pair<int, int>> offsets;
-        int diag_step = k_runaway_step / 1.4142;
+    static bool first = true;
+    static vector<pair<int, int>> offsets;
+    if (first) {
+        first = false;
         offsets.push_back(make_pair(0, -k_runaway_step)); // north
         offsets.push_back(make_pair(0, k_runaway_step)); // south
         offsets.push_back(make_pair(k_runaway_step, 0)); // east
         offsets.push_back(make_pair(-k_runaway_step, 0)); // north
-        offsets.push_back(make_pair(diag_step, -diag_step)); // ne
-        offsets.push_back(make_pair(-diag_step, -diag_step)); // nw
-        offsets.push_back(make_pair(diag_step, -diag_step)); // se
-        offsets.push_back(make_pair(-diag_step, -diag_step)); // sw
+        offsets.push_back(make_pair(k_runaway_step_diag, -k_runaway_step_diag)); // ne
+        offsets.push_back(make_pair(-k_runaway_step_diag, -k_runaway_step_diag)); // nw
+        offsets.push_back(make_pair(k_runaway_step_diag, -k_runaway_step_diag)); // se
+        offsets.push_back(make_pair(-k_runaway_step_diag, -k_runaway_step_diag)); // sw
+    }
 
+    if (!location_is_safe_p(me, enemies, k_safe_distance)) {
+        // check north, south, east, west
+        Location potential_loc(me.x(), me.y());
+        cerr << ":debug: we are in danger" << endl;
         int best_distance = -1;
         Location best_location;
         for (auto &loc : offsets) {
