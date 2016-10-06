@@ -17,44 +17,6 @@ bool unit_tests();
 //
 // begin classes declarations
 //
-class Location
-{
-public:
-
-    Location()
-      : m_x(-1), m_y(-1)
-    {};
-
-    Location(int x, int y)
-      : m_x(x), m_y(y)
-    {};
-
-    void set_x(int x)
-    {
-        m_x = x;
-    }
-
-    void set_y(int y)
-    {
-        m_y = y;
-    }
-
-    int x() const
-    {
-        return m_x;
-    }
-
-    int y() const
-    {
-        return m_y;
-    }
-
-private:
-    int m_x;
-    int m_y;
-};
-
-
 class Enemy
 {
 public:
@@ -307,7 +269,7 @@ bool location_is_safe_p(const Location &loc, const vector<Enemy> &enemies,
 
 int get_min_distance_to_enemies(const Location &loc, const vector<Enemy> &enemies)
 {
-    int min_distance = 100000;
+    int min_distance = k_max_dist;
     for (auto &enemy : enemies) {
         int d = distance(loc, enemy);
         if (d < min_distance) {
@@ -317,12 +279,44 @@ int get_min_distance_to_enemies(const Location &loc, const vector<Enemy> &enemie
     return min_distance;
 }
 
+/*
+int shots_needed_by_distance(int life, int distance, int shots)
+{
+    int remaining_life = life - (125000.0 / pow(distance, 1.2));
+    ++shots;
+    if (remaining_life <= 0) {
+        return shots;
+    } else {
+        return shots_needed_by_distance(remaining_life,
+                                        distance + k_moving_factor_shooting, shots);
+    }
+}
+*/
 
+/**
+ * @return the number of shots to kill an enemy, considering distance and life.
+ */
+int shots_needed(const Location &me, const Enemy &enemy)
+{
+    return ceil(enemy.life() / round(125000.0 / pow(distance(me, enemy), 1.2)));
+}
+
+
+/**
+ * @return how far away we should be from an enemy before shooting.
+ * :fixme: Needs better algorithm.
+ */
 int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int no_enemies)
 {
     int rc = k_recommended_distance_more;
-    if (enemy.life() <= 5) {
-        rc = 100000;
+
+    // first check the formula
+    // else make some grouping based on life, distance and number of enemies
+    int shots = shots_needed(me, enemy);
+    if (shots == 1 || shots == 2) {
+        rc = k_max_dist;
+    } else if (enemy.life() <= 5) {
+        rc = k_max_dist;
     } else if (enemy.life() <= 25) {
         if (no_enemies == 1) {
             if (enemy.distance_to_point() <= 1000) {
@@ -409,7 +403,7 @@ static int g_current_target_id = -1;
 void strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
                                  vector<Enemy> &enemies)
 {
-    int min_distance = 100000;
+    int min_distance = k_max_dist;
     int min_id = -1;
     Location min_loc;
     for (auto &enemy : enemies) {
@@ -437,7 +431,7 @@ void strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
 bool strategy_kill_closest_to_point(Location &me, vector<DataPoint> &points,
                                     vector<Enemy> &enemies, int radius = -1)
 {
-    int min_distance = 100000;
+    int min_distance = k_max_dist;
     int min_id = -1;
     Enemy target;
     for (auto &enemy : enemies) {
@@ -511,7 +505,7 @@ int enemies_around(Location &loc, vector<Enemy> &enemies, int radius)
 void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
 {
     for (auto &enemy : enemies) {
-        int min_dist = 100000;
+        int min_dist = k_max_dist;
         int min_id = -1;
         for (auto &point : points) {
             int d = distance(enemy, point);
@@ -520,7 +514,7 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
                 min_id = point.id();
             }
         }
-        if (min_dist != 100000) {
+        if (min_dist != k_max_dist) {
             enemy.inc_danger(-min_dist);
             enemy.set_distance_to_point(min_dist);
             DataPoint &min_point = get_point_by_id(points, min_id);
@@ -598,7 +592,7 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
 int main(int argc, char *argv[])
 {
     if (argc > 1 && string(argv[1]) == "--tests") {
-        exit(unit_tests() ? 0 : 1);
+        exit((unit_tests() && unit_tests_common()) ? 0 : 1);
     }
 
     Location me;
@@ -627,8 +621,18 @@ bool unit_tests()
     Location l4(13545,8091);
     TEST_EQ(distance(l3, l4), 2555);
 
-    vector<int> v = { 0, 7, -1, 3};
-    TEST_EQ(count_if<int>([] (int i) -> bool { return i < 0; }, v), 1);
+    Location me(0, 0);
+
+    Enemy e1(1, 6200, 0, 3); // 6200 points away, life 3 -> 1 shot needed
+    TEST_EQ(shots_needed(me, e1), 1);
+
+    Enemy e2(1, 6200, 0, 10); // 6200 points away, life 10 -> 3 shots needed
+    TEST_EQ(shots_needed(me, e2), 3);
+
+    Enemy e3(1, 6200, 0, 8); // 6200 points away, life 8 -> 2 shots needed
+    TEST_EQ(shots_needed(me, e3), 2);
 
     return true;
+
+#undef TEST_EQ
 }
