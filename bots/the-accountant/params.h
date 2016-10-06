@@ -13,4 +13,7 @@ static const int k_runaway_step_diag = k_runaway_step / 1;
 /// just some big value, bigger than any possible distance
 static const int k_max_dist = 0;
 
+static const int k_safe_angle = 0;
+static const int k_safe_dist_from_point = 0;
+
 #endif

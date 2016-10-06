@@ -17,87 +17,6 @@ bool unit_tests();
 //
 // begin classes declarations
 //
-class Enemy
-{
-public:
-    Enemy(int id = -1, int x = -1, int y = -1, int life = -1)
-      : m_id(id), m_location(x, y), m_life(life), m_target_point_id(-1), m_danger(100000),
-        m_distance_to_point(-1)
-    {};
-
-    int x() const
-    {
-        return m_location.x();
-    }
-
-    int y() const
-    {
-        return m_location.y();
-    }
-
-    int id() const
-    {
-        return m_id;
-    }
-
-    string to_str() const
-    {
-        ostringstream ostr;
-        ostr << "Enemy: id=" << m_id << ", x=" << m_location.x() << ", y="
-             << m_location.y() << ", life=" << m_life;
-        return ostr.str();
-    }
-
-    void set_target_point(int point_id)
-    {
-        m_target_point_id = point_id;
-    }
-
-    int target_point_id() const
-    {
-        return m_target_point_id;
-    }
-
-    bool is_valid() const
-    {
-        return (m_id != -1);
-    }
-
-    void inc_danger(int value)
-    {
-        m_danger += value;
-    }
-
-    int danger() const
-    {
-        return m_danger;
-    }
-
-    void set_distance_to_point(int dist)
-    {
-        m_distance_to_point = dist;
-    }
-
-    int distance_to_point() const
-    {
-        return m_distance_to_point;
-    }
-
-    int life() const
-    {
-        return m_life;
-    }
-
-private:
-    int m_id;
-    Location m_location;
-    int m_life;
-    int m_target_point_id;
-    int m_danger;
-    int m_distance_to_point;
-};
-
-
 class DataPoint
 {
 public:
@@ -157,6 +76,102 @@ private:
     vector<int> m_enemy_ids;
     int m_min_distance_to_enemy;
 };
+
+static DataPoint k_invalid_point;
+
+class Enemy
+{
+public:
+    Enemy(int id = -1, int x = -1, int y = -1, int life = -1)
+      : m_id(id), m_location(x, y), m_life(life), m_target_point_id(-1),
+        m_target(k_invalid_point), m_danger(100000), m_distance_to_point(-1)
+    {};
+
+    int x() const
+    {
+        return m_location.x();
+    }
+
+    int y() const
+    {
+        return m_location.y();
+    }
+
+    int id() const
+    {
+        return m_id;
+    }
+
+    string to_str() const
+    {
+        ostringstream ostr;
+        ostr << "Enemy: id=" << m_id << ", x=" << m_location.x() << ", y="
+             << m_location.y() << ", life=" << m_life;
+        return ostr.str();
+    }
+
+    void set_target(const DataPoint &d)
+    {
+        m_target = d;
+    }
+
+    /*
+    void set_target_point(int point_id)
+    {
+        m_target_point_id = point_id;
+    }
+    */
+
+    int target_point_id() const
+    {
+        return m_target.id();
+    }
+
+    DataPoint target() const
+    {
+        return m_target;
+    }
+
+    bool is_valid() const
+    {
+        return (m_id != -1);
+    }
+
+    void inc_danger(int value)
+    {
+        m_danger += value;
+    }
+
+    int danger() const
+    {
+        return m_danger;
+    }
+
+    void set_distance_to_point(int dist)
+    {
+        m_distance_to_point = dist;
+    }
+
+    int distance_to_point() const
+    {
+        return m_distance_to_point;
+    }
+
+    int life() const
+    {
+        return m_life;
+    }
+
+private:
+    int m_id;
+    Location m_location;
+    int m_life;
+    int m_target_point_id;
+    DataPoint m_target;
+    int m_danger;
+    int m_distance_to_point;
+};
+
 //
 // end classes declarations
 //
@@ -170,7 +185,6 @@ private:
 //
 
 static const Enemy k_invalid_enemy;
-static DataPoint k_invalid_point;
 
 
 void read_data(Location &my_location, vector<DataPoint> &data_points,
@@ -238,6 +252,32 @@ bool location_is_valid_p(const Location &loc)
 }
 
 
+bool enemy_is_moving_away(const Location &me, const Enemy &enemy)
+{
+    bool rc = false;
+    const DataPoint &point = enemy.target();
+    int my_angle = -1;
+    int my_distance = -1;
+    int enemy_distance = -1;
+    int enemy_angle = -1;
+    if (point.is_valid() && distance(me, point) > k_safe_dist_from_point) {
+        my_angle = orientation(me, point);
+        my_distance = distance(me, point);
+        enemy_angle = orientation(enemy, point);
+        enemy_distance = distance(enemy, point);
+        if (my_distance > enemy_distance + 800) {
+            rc = true;
+        } else if (abs(my_angle - enemy_angle) > k_safe_angle) {
+            rc = true;
+        }
+        cerr << "Me and enemy " << enemy.to_str() << "mangle=" << my_angle
+             << ",eangle=" << enemy_angle << ",mdist=" << my_distance
+             << ",edist=" << enemy_distance << ",rc=" << rc << endl;
+    }
+    return rc;
+}
+
+
 bool location_is_safe_p(const Location &loc, const vector<Enemy> &enemies,
                         int min_distance)
 {
@@ -248,7 +288,8 @@ bool location_is_safe_p(const Location &loc, const vector<Enemy> &enemies,
     int potential_distance = -1;
 #endif
     for (auto &enemy : enemies) {
-        if (distance(loc, enemy) < min_distance) {
+        if (distance(loc, enemy) < min_distance
+            && !enemy_is_moving_away(loc, enemy)) {
 #ifdef DEBUG
             dangerous_enemy = enemy;
             potential_distance = distance(loc, enemy);
@@ -519,7 +560,7 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
             enemy.set_distance_to_point(min_dist);
             DataPoint &min_point = get_point_by_id(points, min_id);
             if (min_point.is_valid()) {
-                enemy.set_target_point(min_point.id());
+                enemy.set_target(min_point);
             }
         }
     }
