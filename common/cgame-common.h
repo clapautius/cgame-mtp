@@ -63,18 +63,33 @@ template<class A, class B>
 
 /**
  * @return the angle of the vector A -> B (degrees).
+ * :fixme: to be optimized
  */
 template<class A, class B>
   int orientation(const A &a, const B &b)
 {
     double xx = b.x() - a.x();
     double yy = b.y() - a.y();
+    if (xx == 0) {
+        if (yy >= 0) {
+            return 270;
+        } else {
+            return 90;
+        }
+    }
+    if (yy == 0) {
+        if (xx >= 0) {
+            return 0;
+        } else {
+            return 180;
+        }
+    }
     int angle = atan(yy / xx) * 180.0 / 3.1415926;
     //std::cerr << "angle: " << angle << std::endl;
     if (xx < 0 && yy < 0) {
         angle += 180;
     } else if (xx < 0 && yy > 0) {
-        angle = 90 - angle;
+        angle = 180 + angle;
     } else if (xx > 0 && yy < 0) {
         angle = 360 + angle;
     }
@@ -83,6 +98,8 @@ template<class A, class B>
 
 
 int diff_angle(int angle1, int angle2);
+
+double angle_deg_to_rad(int degrees);
 
 bool unit_tests_common();
 
