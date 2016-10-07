@@ -105,8 +105,9 @@ public:
     string to_str() const
     {
         ostringstream ostr;
-        ostr << "Enemy: id=" << m_id << ", x=" << m_location.x() << ", y="
-             << m_location.y() << ", life=" << m_life;
+        ostr << "Enemy(" << m_id << "," << m_location.x() << ","
+             << m_location.y() << ",life=" << m_life
+             << ",target=" << m_target.id() << ")";
         return ostr.str();
     }
 
@@ -195,6 +196,7 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
     cin >> x >> y; cin.ignore();
     my_location.set_x(x);
     my_location.set_y(y);
+    cerr << ":debug: me(" << x << "," << y << ")" << endl;
 
     int dataCount;
     cin >> dataCount; cin.ignore();
@@ -205,6 +207,7 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
         int dataY;
         cin >> dataId >> dataX >> dataY; cin.ignore();
         DataPoint d(dataId, dataX, dataY);
+        cerr << ":debug: new point: " << d.to_str() << endl;
         data_points.push_back(d);
     }
     int enemyCount;
@@ -256,23 +259,31 @@ bool enemy_is_moving_away(const Location &me, const Enemy &enemy)
 {
     bool rc = false;
     const DataPoint &point = enemy.target();
-    int my_angle = -1;
+    //int my_angle = -1;
     int my_distance = -1;
     int enemy_distance = -1;
-    int enemy_angle = -1;
-    if (point.is_valid() && distance(me, point) > k_safe_dist_from_point) {
-        my_angle = orientation(me, point);
+    //int enemy_angle = -1;
+    if (point.is_valid() && distance(me, point) > k_safe_dist_me_from_point
+        && distance(enemy, point) > k_safe_dist_enemy_from_point) {
+        //my_angle = orientation(me, point);
         my_distance = distance(me, point);
-        enemy_angle = orientation(enemy, point);
+        //enemy_angle = orientation(enemy, point);
         enemy_distance = distance(enemy, point);
         if (my_distance > enemy_distance + 800) {
             rc = true;
-        } else if (abs(my_angle - enemy_angle) > k_safe_angle) {
+        }
+        /*
+        else if (diff_angle(my_angle, enemy_angle) > k_safe_angle) {
             rc = true;
         }
-        cerr << "Me and enemy " << enemy.to_str() << "mangle=" << my_angle
-             << ",eangle=" << enemy_angle << ",mdist=" << my_distance
-             << ",edist=" << enemy_distance << ",rc=" << rc << endl;
+        */
+        /*
+        cerr << "Me and enemy " << enemy.to_str() << ": mangle=" << my_angle
+             << ", eangle=" << enemy_angle << ", mdist=" << my_distance
+             << ", edist=" << enemy_distance << ", rc=" << rc << endl;
+        */
+        cerr << "Me and enemy " << enemy.to_str() << ": mdist=" << my_distance
+             << ", edist=" << enemy_distance << ", rc=" << rc << endl;
     }
     return rc;
 }
@@ -359,26 +370,37 @@ int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int n
     } else if (enemy.life() <= 5) {
         rc = k_max_dist;
     } else if (enemy.life() <= 25) {
-        if (no_enemies == 1) {
+        if (no_enemies == 1 || no_enemies == 2) {
             if (enemy.distance_to_point() <= 1000) {
                 // don't waste time moving if it's too close, just shoot
                 rc = k_recommended_distance_more;
             } else {
-                rc = k_recommended_distance_one;
+                if (enemy_is_moving_away(me, enemy)) {
+                    rc = max(k_recommended_distance_one - 1200, k_safe_distance);
+                } else {
+                    rc = k_recommended_distance_one;
+                }
             }
         } else {
             rc = k_recommended_distance_more;
         }
     } else {
-        rc = k_recommended_distance_strong;
+        if (enemy_is_moving_away(me, enemy)) {
+            rc = max(k_recommended_distance_strong - 1200, k_safe_distance);
+        } else {
+            rc = k_recommended_distance_strong;
+        }
     }
+    cerr << ":debug: recommended dist for enemy " << enemy.to_str()
+         << " : " << rc << endl;
     return rc;
 }
 
 
 void attack_enemy(const Location &me, const Enemy &target, int no_enemies)
 {
-    if (distance(me, target) > recommended_distance_for_enemy(me, target, no_enemies)) {
+    if (distance(me, target) >
+        recommended_distance_for_enemy(me, target, no_enemies) * 1.1) {
         // too far away
         cout << "MOVE " << target.x() << " " << target.y() << endl;
     } else {
@@ -534,11 +556,17 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
 /**
  * @return the number of enemies near the specified location.
  */
-int enemies_around(Location &loc, vector<Enemy> &enemies, int radius)
+int enemies_around(Location &loc, vector<Enemy> &enemies, int radius,
+                   bool check_moving_away = false)
 {
     return count_if<Enemy>(
       [&] (const Enemy &e) -> bool
-        { return (distance(loc, e) <= radius); },
+        {
+            if (check_moving_away) {
+                return distance(loc, e) <= radius && !enemy_is_moving_away(loc, e);
+            } else {
+                return (distance(loc, e) <= radius);
+            }},
       enemies);
 }
 
@@ -574,8 +602,8 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
     // First run if enemy is close
     bool close_strategy = false;
     bool command_executed = false;
-    int enemies_around_me = enemies_around(me, enemies, k_enemy_distance);
-    int enemies_near_me = enemies_around(me, enemies, k_safe_distance);
+    int enemies_around_me = enemies_around(me, enemies, k_enemy_distance, true);
+    int enemies_near_me = enemies_around(me, enemies, k_safe_distance, false);
     cerr << ":debug: enemies near: " << enemies_near_me << ", around="
          << enemies_around_me << endl;
     if (enemies_around_me == 1) {

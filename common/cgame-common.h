@@ -59,6 +59,7 @@ template<class A, class B>
     return static_cast<int>(sqrt(xx * xx + yy * yy));
 }
 
+//#include <iostream>
 
 /**
  * @return the angle of the vector A -> B (degrees).
@@ -69,6 +70,7 @@ template<class A, class B>
     double xx = b.x() - a.x();
     double yy = b.y() - a.y();
     int angle = atan(yy / xx) * 180.0 / 3.1415926;
+    //std::cerr << "angle: " << angle << std::endl;
     if (xx < 0 && yy < 0) {
         angle += 180;
     } else if (xx < 0 && yy > 0) {
@@ -79,6 +81,8 @@ template<class A, class B>
     return static_cast<int>(angle);
 }
 
+
+int diff_angle(int angle1, int angle2);
 
 bool unit_tests_common();
 

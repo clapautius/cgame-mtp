@@ -106,6 +106,14 @@ Response time per game turn ≤ 100ms
 
 __________
 
+Best scores for tests:
+Armored enemy redux (2016-10-06): 758
+Armored enemy (2016-10-06): 237
+Battle (2016-10-06): 391
+Strong enemy in the distance: 165
+Unavoidable losses: 245
+
+
 2016-10-04-0 (first version): Best score 5218, 100%, Rank 170 / 1,035
 2016-10-04-1: Best score 8060, 100%, Rank 142 / 1,045
 2016-10-04-2: 8344 but some validators fail.
@@ -113,8 +121,5 @@ __________
 2016-10-04-4: Best score 9385, 100%, Rank 148 / 1,117
 2016-10-05-0: Best score 10180, 100%, Rank 160 / 1,225
 2016-10-05-1: Best score 11176, 100%, Rank 87 / 1,238
-
 2016-10-06-0: Score 11122
-Battle: 391 points.
-
 2016-10-06-1: Best score 11619, 100%, Rank 99 / 1,318
