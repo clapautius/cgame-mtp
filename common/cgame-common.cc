@@ -36,8 +36,9 @@ bool unit_tests_common()
     TEST_EQ(orientation(Location(0,0), Location(-10, 10)), 135);
     TEST_EQ(orientation(Location(0,0), Location(-10, -10)), 225);
 
-    TEST_EQ(orientation(Location(8004,774), Location(0, 2000)), 172);
-    TEST_EQ(orientation(Location(5499,4500), Location(4499, 4500)), 180);
+    TEST_EQ(orientation(Location(8004, 774), Location(0, 2000)), 172);
+    TEST_EQ(orientation(Location(5499, 4500), Location(4499, 4500)), 180);
+    TEST_EQ(orientation(Location(5000, 4500), Location(5000, 5500)), 90);
 
     TEST_EQ(diff_angle(30, 330), 60);
     TEST_EQ(diff_angle(90, 0), 90);

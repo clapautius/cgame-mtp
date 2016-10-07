@@ -72,9 +72,9 @@ template<class A, class B>
     double yy = b.y() - a.y();
     if (xx == 0) {
         if (yy >= 0) {
-            return 270;
-        } else {
             return 90;
+        } else {
+            return 270;
         }
     }
     if (yy == 0) {

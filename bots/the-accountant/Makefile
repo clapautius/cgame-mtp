@@ -16,8 +16,8 @@ onefile:
 	g++ $(CFLAGS) -o tst.exe .the-accountant.cc
 
 # for windoze
-#	cat the-accountant.cc | clip
+#	cat .the-accountant.cc | clip
 # for linux
-#	cat the-accountant.cc | xclip -selection clipboard -display ":0"
+#	cat .the-accountant.cc | xclip -selection clipboard -display ":0"
 clipboard:
-	cat .the-accountant.cc | clip
+	cat .the-accountant.cc | xclip -selection clipboard -display ":0"

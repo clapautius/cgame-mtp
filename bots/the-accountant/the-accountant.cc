@@ -9,7 +9,7 @@
 using namespace std;
 
 // uncomment to get lots of debug messages on cerr
-//#define DEBUG
+#define DEBUG
 
 
 bool unit_tests();
@@ -273,28 +273,19 @@ bool enemy_is_moving_away(const Location &me, const Enemy &enemy)
     if (point.is_valid() && distance(me, point) > k_safe_dist_me_from_point
         && distance(enemy, point) > k_safe_dist_enemy_from_point) {
 */
-    if (point.is_valid()) {
+    if (point.is_valid() && distance(enemy, point) > k_safe_dist_enemy_from_point) {
         my_angle = orientation(me, point);
         my_distance = distance(me, point);
         enemy_angle = orientation(enemy, point);
         enemy_distance = distance(enemy, point);
-        if (my_distance > enemy_distance + 500 &&
-            diff_angle(my_angle, enemy_angle) < 90) {
+        if (my_distance > enemy_distance + k_safe_dist_me_from_enemy_away &&
+            diff_angle(my_angle, enemy_angle) < k_safe_angle) {
             rc = true;
         }
-        /*
-        else if (diff_angle(my_angle, enemy_angle) > k_safe_angle) {
-            rc = true;
-        }
-        */
-        /*
-        cerr << "Me and enemy " << enemy.to_str() << ": mangle=" << my_angle
-             << ", eangle=" << enemy_angle << ", mdist=" << my_distance
-             << ", edist=" << enemy_distance << ", rc=" << rc << endl;
-        */
 #ifdef DEBUG
         cerr << "Me and enemy " << enemy.to_str() << ": mdist=" << my_distance
-             << ", edist=" << enemy_distance << ", rc=" << rc << endl;
+             << ", edist=" << enemy_distance << ", diff_angle="
+             << diff_angle(my_angle, enemy_angle) << ", away=" << rc << endl;
 #endif
     }
     return rc;
@@ -394,6 +385,8 @@ int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int n
                 rc = k_recommended_distance_one;
             }
             //}
+        } if (no_enemies >= 6) {
+            rc = k_recommended_distance_many_more;
         } else {
             rc = k_recommended_distance_more;
         }
@@ -663,12 +656,27 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
 }
 
 
+/**
+ * Kill enemies that can be killed in one shot.
+ */
+bool kill_weak_enemies(Location &me, vector<Enemy> &enemies)
+{
+    for (auto &e : enemies) {
+        if (shots_needed(me, e) == 1) {
+            return attack_enemy(me, e, enemies.size());
+        }
+    }
+    return false;
+}
+
+
 void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
 {
     compute_connections(me, points, enemies);
 
     // First run if enemy is close
-    bool close_strategy = false;
+    //bool close_strategy = false;
+
     bool command_executed = false;
     int enemies_around_me = enemies_around(me, enemies, k_enemy_distance, true);
     int enemies_near_me = enemies_around(me, enemies, k_safe_distance, true);
@@ -676,13 +684,13 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
          << enemies_around_me << endl;
     if (enemies_around_me == 1) {
         cerr << "one enemy around - close fight" << endl;
-        close_strategy = true;
+        //close_strategy = true;
         if (enemies_near_me) {
             command_executed = run_away_if_needed(me, enemies);
         }
     } else if (enemies_around_me > 1 || enemies_near_me >= 1) {
         cerr << "more enemies around - fight or flight" << endl;
-        close_strategy = true;
+        //close_strategy = true;
         command_executed = run_away_if_needed(me, enemies);
     }
 
@@ -693,6 +701,10 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
     }
     */
 
+    command_executed ||
+      (command_executed = kill_weak_enemies(me, enemies));
+
+    /*
     if (!command_executed && close_strategy) {
         strategy_kill_closest_enemy(me, points, enemies);
         command_executed = true;
@@ -706,6 +718,7 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
             g_current_target_id = -1;
         }
     }
+    */
 
     command_executed ||
       (command_executed = strategy_kill_dangerous(me, points, enemies));
