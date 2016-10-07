@@ -9,7 +9,7 @@
 using namespace std;
 
 // uncomment to get lots of debug messages on cerr
-#define DEBUG
+//#define DEBUG
 
 
 bool unit_tests();
@@ -526,7 +526,13 @@ bool run_away_if_needed(Location &me, vector<Enemy> &enemies)
 
 static int g_current_target_id = -1;
 
-// Simple strategy - just shoot the closest enemy.
+/**
+ * Simple strategy - just shoot the closest enemy.
+ *
+ * @return true if an action has been taken.
+ *
+ * @globals: g_current_target_id (probably deprecated).
+ */
 bool strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
                                  vector<Enemy> &enemies)
 {
@@ -547,8 +553,7 @@ bool strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
         // :fixme: check result of get_enemy_by_id
         return attack_enemy(me, get_enemy_by_id(enemies, min_id), enemies.size());
     } else {
-        // just stay there
-        return goto_location(me, me);
+        return false;
     }
 }
 
@@ -694,12 +699,9 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
         command_executed = run_away_if_needed(me, enemies);
     }
 
-    /*
-    if (!command_executed && enemies_near_me >= 1) {
-        strategy_kill_closest_enemy(me, points, enemies);
-        command_executed = true;
+    if (!command_executed && (enemies_near_me >= 1 || enemies_around_me >= 1)) {
+        command_executed = strategy_kill_closest_enemy(me, points, enemies);
     }
-    */
 
     command_executed ||
       (command_executed = kill_weak_enemies(me, enemies));
