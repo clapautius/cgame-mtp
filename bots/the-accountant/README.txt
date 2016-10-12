@@ -111,7 +111,7 @@ Simple: 122
 2 enemies: 268
 3 enemies: 166
 Armored enemy redux (2016-10-06): 758
-Armored enemy (2016-10-06): 237
+Armored enemy (2016-10-06): 237 (good for testing runaway angle)
 Battle (2016-10-06): 1068
 Strong enemy in the distance: 165
 Unavoidable losses: 245
@@ -129,3 +129,4 @@ Unavoidable losses: 245
 2016-10-07-0: 10011, 96%
 2016-10-07-1: new tests on coding game, all results reset (46 / 209)
 2016-10-07-2: Best score 21359, 100%, Rank 78 / 1,449
+2016-10-12-0: SCORE  97%, POINTS  17,484
