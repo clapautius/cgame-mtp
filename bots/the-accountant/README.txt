@@ -109,12 +109,16 @@ __________
 Best scores for tests:
 Simple: 122
 2 enemies: 268
+2 enemies redux: 144
 3 enemies: 166
 Armored enemy redux (2016-10-06): 758
 Armored enemy (2016-10-06): 237 (good for testing runaway angle)
 Battle (2016-10-06): 1068
 Strong enemy in the distance: 165
 Unavoidable losses: 245
+Heroism2: 1018
+Crackdown: 438
+Extreme: 3220
 
 
 2016-10-04-0 (first version): Best score 5218, 100%, Rank 170 / 1,035
@@ -130,3 +134,4 @@ Unavoidable losses: 245
 2016-10-07-1: new tests on coding game, all results reset (46 / 209)
 2016-10-07-2: Best score 21359, 100%, Rank 78 / 1,449
 2016-10-12-0: SCORE  97%, POINTS  17,484
+2016-10-13-0: SCORE  91% , POINTS  13,235

@@ -32,6 +32,9 @@ public:
         return m_y;
     }
 
+    void move_towards(int x, int y, int steps);
+    void move_towards(const Location &loc, int steps);
+
 private:
     int m_x;
     int m_y;

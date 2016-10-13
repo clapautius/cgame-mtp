@@ -1,6 +1,28 @@
 #include <iostream>
 #include "cgame-common.h" // :grep-out:
 
+// Location class inmplementation
+void Location::move_towards(int x, int y, int steps)
+{
+    if (steps >= distance(*this, Location(x, y))) {
+        m_x = x;
+        m_y = y;
+    } else {
+        double angle = angle_deg_to_rad(orientation(*this, Location(x, y)));
+        int xx = steps * cos(angle);
+        int yy = steps * sin(angle);
+        m_x += xx;
+        m_y += yy;
+    }
+}
+
+
+void Location::move_towards(const Location &loc, int steps)
+{
+    return move_towards(loc.x(), loc.y(), steps);
+}
+
+
 int diff_angle(int angle1, int angle2)
 {
     int diff = abs(angle1 - angle2);
@@ -42,6 +64,32 @@ bool unit_tests_common()
 
     TEST_EQ(diff_angle(30, 330), 60);
     TEST_EQ(diff_angle(90, 0), 90);
+
+    // Location.move() tests
+    Location loc(0, 0);
+    loc.move_towards(50, 0, 10);
+    TEST_EQ(loc.x(), 10);
+    TEST_EQ(loc.y(), 0);
+
+    loc = Location(0, 0);
+    loc.move_towards(50, 10, 50);
+    TEST_EQ(loc.x(), 50);
+    TEST_EQ(loc.y(), 10);
+
+    loc = Location(0, 0);
+    loc.move_towards(5, 5, 2);
+    TEST_EQ(loc.x(), 1);
+    TEST_EQ(loc.y(), 1);
+
+    loc = Location(0, 0);
+    loc.move_towards(0, -5, 3);
+    TEST_EQ(loc.x(), 0);
+    TEST_EQ(loc.y(), -3);
+
+    loc = Location(0, 0);
+    loc.move_towards(-5, -5, 2);
+    TEST_EQ(loc.x(), -1);
+    TEST_EQ(loc.y(), -1);
 
     return true;
 

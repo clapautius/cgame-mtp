@@ -70,6 +70,11 @@ public:
         return m_min_distance_to_enemy;
     }
 
+    Location location() const
+    {
+        return m_location;
+    }
+
 private:
     int m_id;
     Location m_location;
@@ -168,6 +173,11 @@ public:
         return m_location;
     }
 
+    Location& location()
+    {
+        return m_location;
+    }
+
 private:
     int m_id;
     Location m_location;
@@ -193,6 +203,7 @@ private:
 static const Enemy k_invalid_enemy;
 static vector<Enemy> g_enemies;
 static int g_current_target_id = -1;
+static int g_closest_enemy_idx = -1;
 
 int enemies_around(const Location &loc, const vector<Enemy> &enemies, int radius,
                    bool check_moving_away = false);
@@ -203,6 +214,7 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
 {
     int x;
     int y;
+    bool write_debug = true;
     cin >> x >> y; cin.ignore();
     my_location.set_x(x);
     my_location.set_y(y);
@@ -211,18 +223,28 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
     int dataCount;
     cin >> dataCount; cin.ignore();
     data_points.clear();
+    cerr << "no. data points: " << dataCount << endl;
+    if (dataCount > 60) {
+        write_debug = false;
+    }
     for (int i = 0; i < dataCount; i++) {
         int dataId;
         int dataX;
         int dataY;
         cin >> dataId >> dataX >> dataY; cin.ignore();
         DataPoint d(dataId, dataX, dataY);
-        cerr << "new point: " << d.to_str() << endl;
+        if (write_debug) {
+            cerr << "new point: " << d.to_str() << endl;
+        }
         data_points.push_back(d);
     }
     int enemyCount;
     cin >> enemyCount; cin.ignore();
+    cerr << "no. enemies: " << enemyCount << endl;
     enemies.clear();
+    if (enemyCount > 30) {
+        write_debug = false;
+    }
     for (int i = 0; i < enemyCount; i++) {
         int enemyId;
         int enemyX;
@@ -230,7 +252,9 @@ void read_data(Location &my_location, vector<DataPoint> &data_points,
         int enemyLife;
         cin >> enemyId >> enemyX >> enemyY >> enemyLife; cin.ignore();
         Enemy e(enemyId, enemyX, enemyY, enemyLife);
-        cerr << "new enemy: " << e.to_str() << endl;
+        if (write_debug) {
+            cerr << "new enemy: " << e.to_str() << endl;
+        }
         enemies.push_back(e);
     }
 }
@@ -401,9 +425,18 @@ int shots_needed_by_distance(int life, int distance, int shots)
 /**
  * @return the number of shots to kill an enemy, considering distance and life.
  */
+int shots_needed(int life, int distance)
+{
+    return ceil(life / round(125000.0 / pow(distance, 1.2)));
+}
+
+
+/**
+ * @return the number of shots to kill an enemy, considering distance and life.
+ */
 int shots_needed(const Location &me, const Enemy &enemy)
 {
-    return ceil(enemy.life() / round(125000.0 / pow(distance(me, enemy), 1.2)));
+    return shots_needed(enemy.life(), distance(me, enemy));
 }
 
 
@@ -421,25 +454,33 @@ int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int n
     int shots = shots_needed(me, enemy);
     if (shots == 1 || shots == 2) {
         rc = k_max_dist;
-    }
-    else if (enemy.life() <= 25) {
-        int no_enemies_around = enemies_around(me, g_enemies, 7500, true);
-        if (no_enemies_around == 1 || no_enemies_around == 2) {
-            if (enemy_is_moving_away(me, enemy)) {
-                rc = max(k_recommended_distance_one - 500, k_min_distance + 10);
-            } else {
-                rc = k_recommended_distance_one;
-            }
-        } if (no_enemies_around >= 6) {
-            rc = k_recommended_distance_many_more;
-        } else {
-            rc = k_recommended_distance_more;
-        }
     } else {
-        if (enemy_is_moving_away(me, enemy)) {
-            rc = max(k_recommended_distance_strong - 500, k_min_distance + 10);
+        int no_enemies_around = enemies_around(me, g_enemies,
+                                               k_recommended_dist_radius_around, true);
+        cerr << "enemies around me (radius=" << k_recommended_dist_radius_around << "): "
+             << no_enemies_around << endl;
+        if (enemy.life() <= 25) {
+            if (no_enemies_around <= 1) {
+                if (enemy_is_moving_away(me, enemy)) {
+                    rc = max(k_recommended_distance_one - 500, k_min_distance + 10);
+                } else {
+                    rc = k_recommended_distance_one;
+                }
+            } else if (no_enemies_around >= 6) {
+                rc = k_recommended_distance_many_more;
+            } else {
+                rc = k_recommended_distance_more;
+            }
         } else {
-            rc = k_recommended_distance_strong;
+            if (no_enemies_around <= 1) {
+                if (enemy_is_moving_away(me, enemy)) {
+                    rc = max(k_recommended_distance_strong - 500, k_min_distance + 10);
+                } else {
+                    rc = k_recommended_distance_strong;
+                }
+            } else {
+                rc = k_recommended_distance_more;
+            }
         }
     }
     cerr << "recommended dist for enemy " << enemy.to_str()
@@ -615,24 +656,12 @@ bool run_away_if_needed(Location &me, vector<Enemy> &enemies)
  * @return true if an action has been taken.
  */
 bool strategy_kill_closest_enemy(Location &me, vector<DataPoint> &points,
-                                 vector<Enemy> &enemies)
+                                 vector<Enemy> &enemies, int closest_enemy_idx)
 {
-    int min_distance = k_max_dist;
-    int min_id = -1;
-    Location min_loc;
-    for (auto &enemy : enemies) {
-        int d = distance(me, enemy);
-        if (d < min_distance) {
-            min_distance = d;
-            min_id = enemy.id();
-            min_loc.set_x(enemy.x());
-            min_loc.set_y(enemy.y());
-        }
-    }
-    if (min_id >= 0) {
-        set_current_target(min_id);
+    if (closest_enemy_idx >= 0) {
+        set_current_target(enemies[closest_enemy_idx].id());
         // :fixme: check result of get_enemy_by_id
-        return attack_enemy(me, get_enemy_by_id(enemies, min_id), enemies.size());
+        return attack_enemy(me, enemies[closest_enemy_idx], enemies.size());
     } else {
         return false;
     }
@@ -664,6 +693,32 @@ bool strategy_kill_closest_to_point(Location &me, vector<DataPoint> &points,
 }
 
 
+bool can_be_killed_p(const Location &me, const Enemy &enemy, const DataPoint &point)
+{
+    int rc = false;
+#ifdef DEBUG
+    cerr << __FUNCTION__ << ": me(" << me.x() << "," << me.y() << "), enemy: "
+         << enemy.to_str() << endl;
+#endif
+    int enemy_to_point = distance(enemy, point);
+    if (enemy_to_point <= 500) {
+        rc = false;
+    } else if (shots_needed(me, enemy) > enemy_to_point / 500) {
+        rc = true;
+    } else {
+        Location new_me = me;
+        new_me.move_towards(enemy.location(), 1000);
+        Enemy new_enemy = enemy;
+        new_enemy.location().move_towards(point.location(), 500);
+        rc = can_be_killed_p(new_me, new_enemy, point);
+    }
+#ifdef DEBUG
+    cerr << __FUNCTION__ << ": ret=" << rc << endl;
+#endif
+    return rc;
+}
+
+
 bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
                              vector<Enemy> &enemies)
 {
@@ -676,23 +731,36 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
         bool alone = (enemy.target().targeted_by().size() == 1);
         if (alone) {
             cerr << "found alone enemy: " << enemy.to_str() << endl;
-            enemy.inc_danger(1600);
-            cerr << "- alone + 1600" << endl;
+            int factor = 1100;
+            enemy.inc_danger(factor);
+            cerr << "- alone + " << factor << endl;
         }
         // check if it has multiple points around him
         for (auto &point : points) {
             if (point.id() != enemy.target_point_id() &&
                 distance(point, enemy) < k_safe_distance) {
-                enemy.inc_danger(500);
-                cerr << "- point near:  + 500" << endl;
+                int factor = 500;
+                enemy.inc_danger(factor);
+                cerr << "- point near:  + " << factor << endl;
             }
         }
+        /*
         // check if can be killed (:fixme: magic values)
         int steps_needed = distance(enemy, enemy.target()) / 500;
         int shots = shots_needed(me, enemy);
         if (shots <= 2 || (shots > 2 && (shots + 2 > steps_needed))) {
             enemy.inc_danger(1100);
             cerr << "- can be killed:  + 1100" << endl;
+        }
+        */
+        if (can_be_killed_p(me, enemy, enemy.target())) {
+            int factor = 1600;
+            enemy.inc_danger(factor);
+            cerr << "- can be killed:  + " << factor << endl;
+        } else {
+            int factor = -500;
+            enemy.inc_danger(factor);
+            cerr << "- can be killed:  + " << factor << endl;
         }
         cerr << "Danger: " << enemy.danger() << endl;
     }
@@ -748,6 +816,22 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
             }
         }
     }
+    // closest enemy (index in array)
+    int min_distance = k_max_dist;
+    int min_idx = -1;
+    for (unsigned int i = 0; i < enemies.size(); i++) {
+        Enemy &enemy = enemies[i];
+        int d = distance(me, enemy);
+        if (d < min_distance) {
+            min_distance = d;
+            min_idx = i;
+        }
+    }
+    if (min_idx >= 0) {
+        g_closest_enemy_idx = min_idx;
+    } else {
+        g_closest_enemy_idx = -1;
+    }
 }
 
 
@@ -774,27 +858,31 @@ bool kill_weak_enemies(Location &me, const vector<Enemy> &enemies)
 }
 
 
-void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
+void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies,
+               int closest_enemy_idx = -1)
 {
-    compute_connections(me, points, enemies);
-
     bool command_executed = false;
     int enemies_around_me = enemies_around(me, enemies, k_enemy_distance, true);
     int enemies_near_me = enemies_around(me, enemies, k_safe_distance, true);
-    cerr << "enemies near: " << enemies_near_me << ", around="
+    cerr << "enemies near: " << enemies_near_me << ", around: "
          << enemies_around_me << endl;
-    if (enemies_around_me == 1) {
-        cerr << "one enemy around - close fight" << endl;
-        if (enemies_near_me) {
+    if (enemies_near_me == 1 && enemies_around_me == 1 && closest_enemy_idx >= 0 &&
+        shots_needed(me, enemies[closest_enemy_idx]) == 1) {
+        command_executed = attack_enemy(me, enemies[closest_enemy_idx], enemies.size());
+    } else {
+        if (enemies_around_me == 1) {
+            cerr << "one enemy around - close fight" << endl;
+            if (enemies_near_me) {
+                command_executed = run_away_if_needed(me, enemies);
+            }
+        } else if (enemies_around_me > 1 || enemies_near_me >= 1) {
+            cerr << "more enemies around - fight or flight" << endl;
             command_executed = run_away_if_needed(me, enemies);
         }
-    } else if (enemies_around_me > 1 || enemies_near_me >= 1) {
-        cerr << "more enemies around - fight or flight" << endl;
-        command_executed = run_away_if_needed(me, enemies);
     }
 
     bool close_strategy = false;
-    if (enemies.size() > 50 && points.size() > 50) {
+    if (enemies.size() > 30 || points.size() > 60) {
         close_strategy = true;
     }
     if (enemies_near_me >= 1 || enemies_around_me >= 1) {
@@ -802,7 +890,8 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies)
     }
 
     if (!command_executed && close_strategy) {
-        command_executed = strategy_kill_closest_enemy(me, points, enemies);
+        command_executed = strategy_kill_closest_enemy(me, points, enemies,
+                                                       closest_enemy_idx);
     }
 
     // end of emergency situations - continue with normal strategy
@@ -846,7 +935,8 @@ int main(int argc, char *argv[])
     // game loop
     while (1) {
         read_data(me, points, g_enemies);
-        play_turn(me, points, g_enemies);
+        compute_connections(me, points, g_enemies);
+        play_turn(me, points, g_enemies, g_closest_enemy_idx);
     }
 }
 
