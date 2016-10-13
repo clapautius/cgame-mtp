@@ -114,6 +114,7 @@ Simple: 122
 Armored enemy redux (2016-10-06): 758
 Armored enemy (2016-10-06): 237 (good for testing runaway angle)
 Battle (2016-10-06): 1068
+Surrounded: 424
 Strong enemy in the distance: 165
 Unavoidable losses: 245
 Heroism2: 1018

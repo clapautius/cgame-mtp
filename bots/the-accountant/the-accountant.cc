@@ -9,7 +9,7 @@
 using namespace std;
 
 // uncomment to get lots of debug messages on cerr
-//#define DEBUG
+#define DEBUG
 
 
 bool unit_tests();
@@ -45,6 +45,11 @@ public:
     vector<int> targeted_by() const
     {
         return m_enemy_ids;
+    }
+
+    int no_of_enemies() const
+    {
+        return m_enemy_ids.size();
     }
 
     string to_str() const
@@ -455,18 +460,18 @@ int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int n
     if (shots == 1 || shots == 2) {
         rc = k_max_dist;
     } else {
-        /*
         int no_enemies_around = enemies_around(enemy.location(), g_enemies,
                                                k_recommended_dist_radius_around, false);
         --no_enemies_around;
         cerr << "enemies around (radius=" << k_recommended_dist_radius_around << "): "
              << no_enemies_around << endl;
-        */
+/*
         int no_enemies_around = no_enemies;
+*/
         if (enemy.life() <= 25) {
             if (no_enemies_around <= 1) {
                 if (enemy_is_moving_away(me, enemy)) {
-                    rc = max(k_recommended_distance_one - 500, k_min_distance + 10);
+                    rc = max(k_recommended_distance_one - 1000, k_min_distance + 10);
                 } else {
                     rc = k_recommended_distance_one;
                 }
@@ -479,7 +484,7 @@ int recommended_distance_for_enemy(const Location &me, const Enemy &enemy, int n
         } else {
             if (no_enemies_around <= 1) {
                 if (enemy_is_moving_away(me, enemy)) {
-                    rc = max(k_recommended_distance_strong - 500, k_min_distance + 10);
+                    rc = max(k_recommended_distance_strong - 1000, k_min_distance + 10);
                 } else {
                     rc = k_recommended_distance_strong;
                 }
@@ -502,11 +507,6 @@ bool goto_location(const Location &me, const Location &dest)
 {
     bool rc = false;
     double angle = angle_deg_to_rad(orientation(me, dest));
-    // :tmp:
-#ifdef DEBUG
-    cerr << "angle_deg=" << orientation(me, dest)
-         << ", angle_rad=" << angle << endl;
-#endif
     Location new_loc(me.x() + k_standard_step * cos(angle),
                      me.y() + k_standard_step * sin(angle));
     if (location_safe_to_be_p(new_loc, g_enemies, k_safe_distance)) {
@@ -704,12 +704,18 @@ bool can_be_killed_p(const Location &me, const Enemy &enemy, const DataPoint &po
     int rc = false;
 #ifdef DEBUG
     cerr << __FUNCTION__ << ": me(" << me.x() << "," << me.y() << "), enemy: "
-         << enemy.to_str() << endl;
+         << enemy.to_str() << ", point(" << point.x() << "," << point.y() << ")" << endl;
 #endif
     int enemy_to_point = distance(enemy, point);
+    int shots = shots_needed(me, enemy);
+#ifdef DEBUG
+    cerr << "enemy_to_point=" << enemy_to_point
+         << ",enemy_to_point/500=" << (enemy_to_point / 500)
+         << ", shots=" << shots << endl;
+#endif
     if (enemy_to_point <= 500) {
         rc = false;
-    } else if (shots_needed(me, enemy) > enemy_to_point / 500) {
+    } else if (shots >= (enemy_to_point / 500)) {
         rc = true;
     } else {
         Location new_me = me;
@@ -730,17 +736,19 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
 {
     for (auto &enemy : enemies) {
         // check if it's alone
-#ifdef DEBUG
-        cerr << "analyzing enemy " << enemy.to_str() << endl;
-#endif
         // moving alone towards a target
-        bool alone = (enemy.target().targeted_by().size() == 1);
+        const DataPoint &point = get_point_by_id(points, enemy.target().id());
+        bool alone = (point.no_of_enemies() == 1);
         if (alone) {
+#ifdef DEBUG
             cerr << "found alone enemy: " << enemy.to_str() << endl;
+#endif
             if (can_be_killed_p(me, enemy, enemy.target())) {
                 int factor = 1600;
                 enemy.inc_danger(factor);
+#ifdef DEBUG
                 cerr << "- alone and can be killed:  + " << factor << endl;
+#endif
             }
         }
         // check if it has multiple points around him
@@ -749,7 +757,9 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
                 distance(point, enemy) < k_safe_distance) {
                 int factor = 500;
                 enemy.inc_danger(factor);
+#ifdef DEBUG
                 cerr << "- point near:  + " << factor << endl;
+#endif
             }
         }
 
@@ -763,7 +773,7 @@ bool strategy_kill_dangerous(Location &me, vector<DataPoint> &points,
         }
 #endif
 
-        cerr << "Danger: " << enemy.danger() << endl;
+        cerr << "Danger for enemy " << enemy.to_str() << ": " << enemy.danger() << endl;
     }
 
     sort(enemies.begin(), enemies.end(),
@@ -814,9 +824,11 @@ void compute_connections(Location &me, vector<DataPoint> &points, vector<Enemy> 
             DataPoint &min_point = get_point_by_id(points, min_id);
             if (min_point.is_valid()) {
                 enemy.set_target(min_point);
+                min_point.set_targeted_by(enemy.id(), min_dist);
             }
         }
     }
+
     // closest enemy (index in array)
     int min_distance = k_max_dist;
     int min_idx = -1;
@@ -889,6 +901,14 @@ void play_turn(Location &me, vector<DataPoint> &points, vector<Enemy> &enemies,
     }
     if (enemies_near_me >= 1 || enemies_around_me >= 1) {
         close_strategy = true;
+    }
+
+    // if we already have a target that is almost dead, kill it first
+    if (!command_executed && get_current_target_id() >= 0) {
+        const Enemy &enemy = get_current_target();
+        if (enemy.is_valid() && shots_needed(me, enemy)) {
+            command_executed = attack_enemy(me, enemy, enemies.size());
+        }
     }
 
     if (!command_executed && close_strategy) {
