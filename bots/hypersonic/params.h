@@ -1,0 +1,4 @@
+#ifndef HYPERSONIC_PARAMS_H
+#define HYPERSONIC_PARAMS_H
+
+#endif

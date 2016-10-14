@@ -1,171 +1,23 @@
 #include <iostream>
-#include <string>
-#include <vector>
 #include <algorithm>
-#include <utility>
-#include <deque>
-#include <sstream>
 #include <time.h>
 #include <stdlib.h>
+#include "params.h" // :grep-out:
+#include "world.h" // :grep-out:
+#include "bomb.h" // :grep-out:
 
 // uncomment to have more debug info (useful for unit tests)
-//#define DEBUG_LOCAL
+//#define HYPER_DEBUG
 
 using namespace std;
-
-
-enum EntityType
-{
-    EntityEmpty,
-    EntityBox,
-    //EntityBombMine,
-    EntityBombEnemy,
-    EntityMark,
-    EntityWall,
-    EntityGoodieExtraBomb,
-    EntityGoodieExtraRange
-};
-
-using Location = pair<int, int>;
 
 class World;
 class Player;
 class Bomb;
 
-static vector<pair<int, int> > coords_around(int x, int y, bool include_center = false);
-
 static vector<pair<int, int> > coords_around_2(int x, int y, bool include_center = false);
 
 static bool location_safe_for_bomb_p(const Location &loc, const Bomb &b);
-
-
-
-class World
-{
-public:
-
-    World(int width = 1, int height = 1)
-    {
-        set_world_size(width, height);
-    }
-
-    /**
-     * This is to avoid changing a lot of code.
-     */
-    vector<vector<EntityType>> & matrix()
-    {
-        return m_matrix;
-    };
-
-    int width() const
-    {
-        return m_matrix.size();
-    }
-
-    int height() const
-    {
-        return m_matrix[0].size();
-    }
-
-    EntityType entity(int x, int y) const
-    {
-        return m_matrix[x][y];
-    }
-
-    /**
-     * @return true if the player can move there.
-     */
-    bool is_empty(int x, int y) const
-    {
-        return (entity(x, y) != EntityBox && entity(x, y) != EntityWall &&
-                entity(x, y) != EntityBombEnemy);
-    }
-
-    bool is_empty_or_bomb(int x, int y) const
-    {
-        return (entity(x, y) != EntityBox && entity(x, y) != EntityWall);
-    }
-
-    void set_world_size(int width, int height)
-    {
-        m_matrix.resize(width);
-        for (int i = 0; i < width; i++) {
-            m_matrix[i].resize(height);
-        }
-        m_explosion_matrix.resize(width);
-        for (int i = 0; i < width; i++) {
-            m_explosion_matrix[i].resize(height);
-        }
-        m_explosion_access_matrix.resize(width);
-        for (int i = 0; i < width; i++) {
-            m_explosion_access_matrix[i].resize(height);
-        }
-    }
-
-    /**
-     * Determines what cells are accesible.
-     */
-    void compute_access_zone(int start_x, int start_y);
-
-    void compute_explosion_access_zone(int start_x, int start_y);
-
-    void compute_explosions(vector<Bomb> &world_bombs);
-
-    bool is_accesible(int x, int y) const;
-
-    bool is_explosion_accesible(int x, int y) const;
-
-    /**
-     * @return no. of turns till this cell will explode.
-     */
-    int get_explosion_timeout(int x, int y) const;
-
-    int vital_space() const
-    {
-        return m_vital_space;
-    }
-
-    bool location_valid_p(int x, int y) const
-    {
-        return (x >= 0 && x < width() && y >= 0 && y < height());
-    }
-
-    // debug / test functions
-    void print_explosion_matrix() const
-    {
-        for (int i = 0; i < width(); i++) {
-            for (int j = 0; j < height(); j++) {
-                cerr << m_explosion_matrix[i][j];
-            }
-            cerr << endl;
-        }
-    }
-
-    void set_no_boxes(int boxes)
-    {
-        m_boxes = boxes;
-    }
-
-    int boxes() const
-    {
-        return m_boxes;
-    }
-
-private:
-
-    void compute_access_zone_rec(int x, int y);
-
-    void compute_explosion_access_zone_rec(int start_x, int start_y);
-
-    vector<vector<EntityType> > m_matrix;
-    vector<vector<EntityType> > m_access_matrix;
-    vector<vector<EntityType> > m_explosion_access_matrix;
-    vector<vector<int> > m_explosion_matrix;
-
-    int m_vital_space;
-
-    int m_boxes;
-};
 
 
 class Player
@@ -174,7 +26,7 @@ public:
 
     Player(int id = -1, int x = 0, int y = 0, int bombs_avail = 0)
       : m_id(id), m_x(x), m_y(y), m_bombs_avail(bombs_avail),
-        m_range(0), m_bombs_max(bombs_avail)
+        m_bombs_max(bombs_avail), m_range(0)
     {
     }
 
@@ -237,93 +89,6 @@ private:
     int m_range;
 };
 
-
-class Bomb
-{
-public:
-
-    Bomb()
-      : m_x(-1), m_y(-1)
-    {};
-
-    Bomb(int owner, int x, int y, int time_remaining, int range = 3)
-      : m_owner(owner), m_x(x), m_y(y), m_time_remaining(time_remaining),
-        m_range(range), m_effective_timeout(time_remaining)
-    {
-    }
-
-    int get_x() const
-    {
-        return m_x;
-    }
-
-    int get_y() const
-    {
-        return m_y;
-    }
-
-    /*
-    void set_params(int i1, int i2, int i3, int i4)
-    {
-        m_x = i1;
-        m_y = i2;
-        m_owner = i3;
-        m_range = i4;
-    }
-    */
-
-    int timeout() const
-    {
-        return m_time_remaining;
-    }
-
-    int get_range() const
-    {
-        return m_range;
-    }
-
-    int get_owner() const
-    {
-        return m_owner;
-    }
-
-    vector<Location> get_explosion_area(const World &world);
-
-    void set_effective_timeout(int timeout)
-    {
-        m_effective_timeout = timeout;
-    }
-
-    int effective_timeout() const
-    {
-        return m_effective_timeout;
-    }
-
-    string description() const
-    {
-        ostringstream ostr;
-        ostr << "Bomb: loc(" << m_x << "," << m_y << "), owner=" << m_owner
-             <<  ", range=" << m_range << ", time_remaining=" << m_time_remaining
-             << ", m_effective_time=" << m_effective_timeout << endl;
-        return ostr.str();
-    }
-
-private:
-
-    int m_owner;
-
-    int m_x;
-
-    int m_y;
-
-    int m_time_remaining;
-
-    int m_effective_timeout;
-
-    int m_range;
-};
-
-
 World g_world;
 
 Player g_me;
@@ -331,199 +96,6 @@ Player g_me;
 vector<Player> g_other_players;
 
 vector<Bomb> g_bombs;
-
-
-//// start class implementations
-
-void World::compute_access_zone(int start_x, int start_y)
-{
-    m_vital_space = 0;
-    m_access_matrix.clear();
-    m_access_matrix = m_matrix;
-    compute_access_zone_rec(start_x, start_y);
-}
-
-
-void World::compute_explosion_access_zone(int start_x, int start_y)
-{
-    m_explosion_access_matrix.clear();
-    m_explosion_access_matrix = m_matrix;
-    compute_explosion_access_zone_rec(start_x, start_y);
-}
-
-
-void World::compute_access_zone_rec(int x, int y)
-{
-    m_access_matrix[x][y] = EntityMark;
-    m_vital_space++;
-    vector<pair<int, int> > around = coords_around(x, y);
-    for (auto &coord : around) {
-        if (m_access_matrix[coord.first][coord.second] != EntityMark) {
-            if (is_empty(coord.first, coord.second)) {
-                compute_access_zone_rec(coord.first, coord.second);
-            }
-        }
-    }
-}
-
-
-void World::compute_explosion_access_zone_rec(int x, int y)
-{
-    m_explosion_access_matrix[x][y] = EntityMark;
-    vector<pair<int, int> > around = coords_around(x, y);
-    for (auto &coord : around) {
-        if (m_explosion_access_matrix[coord.first][coord.second] != EntityMark) {
-            if (is_empty_or_bomb(coord.first, coord.second)) {
-                compute_explosion_access_zone_rec(coord.first, coord.second);
-            }
-        }
-    }
-}
-
-
-int World::get_explosion_timeout(int x, int y) const
-{
-    return m_explosion_matrix[x][y];
-}
-
-
-Bomb& find_bomb_with_coords(vector<Bomb> &bombs, int x, int y)
-{
-    for (Bomb &bomb : bombs) {
-        if (bomb.get_x() == x && bomb.get_y() == y) {
-            return bomb;
-        }
-    }
-    // we shouldn't be here
-    throw string("Cannot find bomb with the specified coords");
-}
-
-
-/**
- * Computes a matrix containing explosion times for every cell.
- */
-void World::compute_explosions(vector<Bomb> &world_bombs)
-{
-    // clear matrix (:fixme: optimize)
-    for (int i = 0; i < width(); i++) {
-        for (int j = 0; j < height(); j++) {
-            m_explosion_matrix[i][j] = 9;
-        }
-    }
-    deque<Bomb> bombs;
-    // copy to deque
-    for (auto &bomb : world_bombs) {
-        bombs.push_back(bomb);
-    }
-    while (!bombs.empty()) {
-        Bomb &bomb = bombs.front();
-        bombs.pop_front();
-        vector<Location> locations = bomb.get_explosion_area(*this);
-        for (Location &loc : locations) {
-            int xx = loc.first;
-            int yy = loc.second;
-            if (m_explosion_matrix[xx][yy] > bomb.effective_timeout()) {
-                m_explosion_matrix[xx][yy] = bomb.effective_timeout();
-            }
-            if (bomb.get_x() != xx || bomb.get_y() != yy) {
-                // don't check the same bomb
-                if (entity(xx, yy) == EntityBombEnemy) {
-                    Bomb &other_bomb = find_bomb_with_coords(world_bombs, xx, yy);
-#ifdef DEBUG_LOCAL
-                    cerr << ":debug: found a new bomb on path: "
-                         << other_bomb.description() << endl;
-#endif
-                    if (bomb.effective_timeout() < other_bomb.effective_timeout()) {
-                            other_bomb.set_effective_timeout(bomb.effective_timeout());
-                            bombs.push_back(other_bomb);
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-bool World::is_accesible(int x, int y) const
-{
-    return m_access_matrix[x][y] == EntityMark;
-}
-
-
-bool World::is_explosion_accesible(int x, int y) const
-{
-    return m_explosion_access_matrix[x][y] == EntityMark;
-}
-
-
-/**
- * Pure functional.
- */
-vector<Location> Bomb::get_explosion_area(const World &world)
-{
-    // :fixme: players are also obsacles
-    vector<Location> expl_area;
-
-    expl_area.push_back(make_pair(get_x(), get_y()));
-    for (int i = 1; i < get_range(); i++) {
-        int xx = get_x() + i;
-        int yy = get_y();
-        if (world.location_valid_p(xx, yy)) {
-            EntityType e = world.entity(xx, yy);
-            expl_area.push_back(make_pair(xx, yy));
-            if (e == EntityBox || e == EntityWall || e == EntityGoodieExtraBomb ||
-                e == EntityGoodieExtraRange) {
-                break;
-            }
-        }
-    }
-    for (int i = 1; i < get_range(); i++) {
-        int xx = get_x() - i;
-        int yy = get_y();
-        if (world.location_valid_p(xx, yy)) {
-            EntityType e = world.entity(xx, yy);
-            expl_area.push_back(make_pair(xx, yy));
-            if (e == EntityBox || e == EntityWall || e == EntityGoodieExtraBomb ||
-                e == EntityGoodieExtraRange) {
-                break;
-            }
-        }
-    }
-    for (int i = 1; i < get_range(); i++) {
-        int xx = get_x();
-        int yy = get_y() + i;
-        if (world.location_valid_p(xx, yy)) {
-            EntityType e = world.entity(xx, yy);
-            expl_area.push_back(make_pair(xx, yy));
-            if (e == EntityBox || e == EntityWall || e == EntityGoodieExtraBomb ||
-                e == EntityGoodieExtraRange) {
-                break;
-            }
-        }
-    }
-    for (int i = 1; i < get_range(); i++) {
-        int xx = get_x();
-        int yy = get_y() - i;
-        if (world.location_valid_p(xx, yy)) {
-            EntityType e = world.entity(xx, yy);
-            expl_area.push_back(make_pair(xx, yy));
-            if (e == EntityBox || e == EntityWall || e == EntityGoodieExtraBomb ||
-                e == EntityGoodieExtraRange) {
-                break;
-            }
-        }
-    }
-#ifdef DEBUG_LOCAL
-    cerr << ":debug: explosion area for bomb(" << get_x() << ", " << get_y() << ")" << endl;
-    cerr << ":debug: ";
-    for (auto &loc : expl_area) {
-        cerr << "(" << loc.first << "," << loc.second << ") ";
-    }
-    cerr << endl;
-#endif
-
-    return expl_area;
-}
 
 // make a function from this
         /*
@@ -540,8 +112,6 @@ vector<Location> Bomb::get_explosion_area(const World &world)
         }
         */
 
-
-//// end class implementations
 
 void read_data(int width, int height, int my_id)
 {
@@ -615,13 +185,13 @@ vector<pair<int, int> > coords_around(int x, int y, bool include_center)
     if (x > 0) {
         result.push_back(make_pair(x - 1, y));
     }
-    if (x <= g_world.matrix().size() - 2) {
+    if (x <= static_cast<int>(g_world.matrix().size()) - 2) {
         result.push_back(make_pair(x + 1, y));
     }
     if (y > 0) {
         result.push_back(make_pair(x, y - 1));
     }
-    if (y <= g_world.matrix()[0].size() - 2) {
+    if (y <= static_cast<int>(g_world.matrix()[0].size()) - 2) {
         result.push_back(make_pair(x, y + 1));
     }
 /*
@@ -761,15 +331,16 @@ bool location_valid_p(int x, int y)
 int check_boxes_in_range(int x, int y, int &boxes)
 {
     if (location_valid_p(x, y)) {
-        if (g_world.entity(x, y) == EntityBombEnemy) {
+        EntityType e = g_world.entity(x, y);
+        if (e == EntityBombEnemy) {
             // there is a bomb there, ignore
             return 1; // to continue
         }
-        if (g_world.matrix()[x][y] == EntityBox) {
+        if (e == EntityBox) {
             ++boxes;
             return 2; // to break
         }
-        if (g_world.entity(x, y) == EntityWall) {
+        if (e == EntityWall || e == EntityGoodieExtraBomb || e == EntityGoodieExtraRange) {
             // will block the explosion
             return 2;
         }
@@ -1273,16 +844,21 @@ void game_loop(int width, int height, int my_id)
 }
 
 
-// unit tests declarations
-void test1();
+// unit tests and other debug tests declarations
+bool unit_tests();
+bool test1();
 
 
 /**
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
  **/
-int main()
+int main(int argc, char *argv[])
 {
+    if (argc > 1 && string(argv[1]) == "--tests") {
+        exit(unit_tests() ? 0 : 1);
+    }
+
     int width;
     int height;
     int myId;
@@ -1303,17 +879,40 @@ int main()
 
 // unit tests
 
-void test1()
+bool unit_tests()
 {
+    return true;
+}
+
+
+bool test1()
+{
+    static int test_no = 1;
+#define TEST_EQ(X, Y) do                                                \
+    { ++test_no;                                                        \
+        if (X != Y) {                                                   \
+            std::cerr << "test " << test_no << " fail: " << X << "," << Y << std::endl; \
+            return false; };                                            \
+    } while(0)
+
     World world(8, 8);
     vector<Bomb> bombs;
-
     bombs.push_back(Bomb(0, 2, 2, 8));
     world.matrix()[2][2] = EntityBombEnemy;
-
     bombs.push_back(Bomb(0, 2, 0, 3));
     world.matrix()[2][0] = EntityBombEnemy;
-
     world.compute_explosions(bombs);
-    world.print_explosion_matrix();
+    string s1 = world.get_explosion_matrix_str();
+    string s2 =
+      "39399999"
+      "39399999"
+      "33333999"
+      "39399999"
+      "39399999"
+      "99999999"
+      "99999999"
+      "99999999";
+    TEST_EQ(s1, s2);
+
+    return true;
 }
