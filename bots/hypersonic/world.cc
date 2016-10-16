@@ -1,17 +1,45 @@
+#include <iostream>
 #include <deque>
 #include "world.h" // :grep-out:
 #include "bomb.h" // :grep-out:
+#include "cgame-common.h" // :grep-out:
 
 using std::vector;
 using std::pair;
 using std::deque;
+using std::make_pair;
 
 void World::compute_access_zone(int start_x, int start_y)
 {
     m_vital_space = 0;
     m_access_matrix.clear();
-    m_access_matrix = m_matrix;
-    compute_access_zone_rec(start_x, start_y);
+    m_access_matrix.resize(width());
+    for (int i = 0; i < width(); i++) {
+        m_access_matrix[i].resize(height());
+    }
+
+    std::vector<std::pair<int, int>> moving_coords;
+    moving_coords.push_back(make_pair(0, -1));
+    moving_coords.push_back(make_pair(0, 1));
+    moving_coords.push_back(make_pair(-1, 0));
+    moving_coords.push_back(make_pair(1, 0));
+
+    cgame::bfsearch(m_access_matrix, moving_coords,
+                    [&] (int x, int y) -> bool
+                    { return this->is_empty(x, y); },
+                    start_x, start_y);
+
+    // :tmp:
+    std::cerr << cgame::matrix_to_str(m_access_matrix) << std::endl;
+
+    // compute vital space (:fixme: - optimize this)
+    for (int i = 0; i < width(); i++) {
+        for (int j = 0; j < height(); j++) {
+            if (is_accesible(i, j)) {
+                ++m_vital_space;
+            }
+        }
+    }
 }
 
 
@@ -23,6 +51,7 @@ void World::compute_explosion_access_zone(int start_x, int start_y)
 }
 
 
+/*
 void World::compute_access_zone_rec(int x, int y)
 {
     m_access_matrix[x][y] = EntityMark;
@@ -36,7 +65,7 @@ void World::compute_access_zone_rec(int x, int y)
         }
     }
 }
-
+*/
 
 void World::compute_explosion_access_zone_rec(int x, int y)
 {
@@ -117,11 +146,11 @@ void World::compute_explosions(vector<Bomb> &world_bombs)
 
 bool World::is_accesible(int x, int y) const
 {
-    return m_access_matrix[x][y] == EntityMark;
+    return (m_access_matrix[x][y] >= 0);
 }
 
 
 bool World::is_explosion_accesible(int x, int y) const
 {
-    return m_explosion_access_matrix[x][y] == EntityMark;
+    return (m_explosion_access_matrix[x][y] == EntityMark);
 }

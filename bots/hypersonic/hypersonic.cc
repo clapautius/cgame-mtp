@@ -431,6 +431,9 @@ bool bomb_near_p(int x, int y)
 }
 
 
+/**
+ * @global g_world
+ */
 void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
 {
     if (!g_world.is_empty(x, y)) {
@@ -439,7 +442,7 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
         cerr << "not empty" << endl; // :debug:
         return;
     }
-    int distance = distance_between(make_pair(cur_x, cur_y), make_pair(x, y));
+    int distance = g_world.distance_to(x, y);
     int boxes = get_no_of_boxes_in_range(x, y);
 
     // Minimum factor for a box should be 25, otherwise sometimes it doesn't worth going
@@ -487,16 +490,11 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
 
     if (boxes > 0 && g_me.bombs_available() > 0) {
         // distance is a factor only if we have bombs available
-        if (distance <=1 ) {
-            cost += 2 * k_bonus_for_close_cell;
-        } else {
-            if (distance < 4) {
-                cost += k_bonus_for_close_cell;
-            }
-        }
-    }
+        if (distance <= 3) {
+            cost += k_bonus_for_close_cell;
+        }    }
     if (goodie) {
-        if (distance < 4) {
+        if (distance <= 3) {
             if (goodie_important) {
                 cost += 2 * k_bonus_for_close_cell;
             } else {
@@ -620,7 +618,8 @@ bool check_iminent_explosion(Location &ret)
             fire_in_the_hole = false;
         }
 
-        // not all ok - try to find a safe spot
+        // not all ok - try to find a safe spot (the closest one)
+        int min_dist = 100;
         if (fire_in_the_hole) {
             vector<Location> locations = coords_around_2(xx, yy, true);
             for (auto &l : locations) {
@@ -630,8 +629,11 @@ bool check_iminent_explosion(Location &ret)
                      (l.first == g_me.get_x() && l.second == g_me.get_y()))
                     && g_world.is_accesible(l.first, l.second)
                     && g_world.get_explosion_timeout(l.first, l.second) > 3) {
-                    ret = l;
-                    break;
+                    int d = g_world.distance_to(l.first, l.second);
+                    if (d < min_dist) {
+                        min_dist = d;
+                        ret = l;
+                    }
                 }
             }
         }
@@ -803,7 +805,7 @@ void game_loop(int width, int height, int my_id)
                 cerr << "we are here" << endl;
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
-                     (my_bombs() == 0  || g_world.vital_space() > 12))) {
+                     (my_bombs() == 0  || g_world.vital_space() > k_min_vital_space))) {
                     cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
                     command_executed = true;
                 }
@@ -861,7 +863,7 @@ bool test1();
 int main(int argc, char *argv[])
 {
     if (argc > 1 && string(argv[1]) == "--tests") {
-        exit(unit_tests() ? 0 : 1);
+        exit((unit_tests() && cgame::unit_tests_common()) ? 0 : 1);
     }
 
     int width;

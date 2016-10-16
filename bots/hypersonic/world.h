@@ -72,6 +72,7 @@ public:
 
     /**
      * Determines what cells are accesible.
+     * Also computes distances from the start position to all other cells.
      */
     void compute_access_zone(int start_x, int start_y);
 
@@ -80,6 +81,11 @@ public:
     void compute_explosions(std::vector<Bomb> &world_bombs);
 
     bool is_accesible(int x, int y) const;
+
+    int distance_to(int x, int y) const
+    {
+        return m_access_matrix[x][y];
+    }
 
     bool is_explosion_accesible(int x, int y) const;
 
@@ -128,7 +134,7 @@ private:
     void compute_explosion_access_zone_rec(int start_x, int start_y);
 
     std::vector<std::vector<EntityType> > m_matrix;
-    std::vector<std::vector<EntityType> > m_access_matrix;
+    std::vector<std::vector<int> > m_access_matrix;
     std::vector<std::vector<EntityType> > m_explosion_access_matrix;
     std::vector<std::vector<int> > m_explosion_matrix;
 
