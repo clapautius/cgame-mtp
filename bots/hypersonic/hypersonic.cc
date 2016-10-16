@@ -7,9 +7,6 @@
 #include "world.h" // :grep-out:
 #include "bomb.h" // :grep-out:
 
-// uncomment to have more debug info (useful for unit tests)
-//#define HYPER_DEBUG
-
 using namespace std;
 
 class World;
@@ -31,6 +28,8 @@ public:
       : m_id(id), m_x(x), m_y(y), m_bombs_avail(bombs_avail),
         m_bombs_max(bombs_avail), m_range(0)
     {
+        cerr << "new player " << m_id << ": " << m_x << "," << m_y
+             << ", bombs.av.=" << m_bombs_avail << ", range=" << m_range << endl;
     }
 
     int get_x() const
@@ -48,11 +47,11 @@ public:
         return m_id;
     }
 
-    void set_params(int id, int i1, int i2, int i3, int i4)
+    void set_params(int id, int i1, int i2, int i3, int i4, bool is_me = false)
     {
         m_id = id;
-        cerr << "new params for player " << m_id << ": " << i1 << "," << i2
-             << ", bombs=" << i3 << ", range=" << i4 << endl;
+        cerr << "new params for " << (is_me ? "me " : "player ") << m_id << ": "
+             << i1 << "," << i2 << ", bombs.av.=" << i3 << ", range=" << i4 << endl;
         m_x = i1;
         m_y = i2;
         m_bombs_avail = i3;
@@ -155,7 +154,7 @@ void read_data(int width, int height, int my_id)
         //cerr << "got new entity: " << entityType << endl; // :debug:
         if (entityType == 0) {
             if (owner == my_id) {
-                g_me.set_params(my_id, x, y, param1, param2);
+                g_me.set_params(my_id, x, y, param1, param2, true);
             } else {
                 Player player(owner, x, y, param1);
                 g_other_players.push_back(player);
@@ -399,7 +398,7 @@ int get_no_of_boxes_in_range(int x, int y)
     return boxes;
 }
 
-
+#if 0
 bool bomb_near_p(int x, int y)
 {
     // bomb near location (range = 1)
@@ -429,7 +428,7 @@ bool bomb_near_p(int x, int y)
     }
     return bomb_near;
 }
-
+#endif
 
 /**
  * @global g_world
@@ -451,6 +450,7 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     // boxes too valuable.
     cost = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
 
+#if 0
     if (bomb_near_p(x, y)) {
         cost -= 150;
     }
@@ -461,25 +461,30 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
             cost -= 105;
         }
     }
+#endif
 
+    /*
     bool goodie = false;
     bool goodie_important = false;
+    */
     if (g_world.entity(x, y) == EntityGoodieExtraBomb) {
-        goodie = true;
-        if (g_me.bombs_max() >= 2) {
+        //goodie = true;
+        if (g_me.bombs_max() >= 3) {
             cost += k_goodie_not_important; // not that important
         } else {
             cost += k_goodie_bomb_important; // important
-            goodie_important = true;
+            //goodie_important = true;
         }
         if (boxes == 0) {
             target_type = 1;
         }
     }
     if (g_world.entity(x, y) == EntityGoodieExtraRange) {
-        goodie = true;
+        //goodie = true;
         if (g_me.bomb_range() > 4) {
             cost += k_goodie_not_important; // not that important
+        } if (g_me.bomb_range() >= 8) {
+            cost += 1; // not important at all
         } else {
             cost += k_goodie_range_important; // important
         }
@@ -490,16 +495,8 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
 
     if (boxes > 0 && g_me.bombs_available() > 0) {
         // distance is a factor only if we have bombs available
-        if (distance <= 3) {
+        if (distance <= 2) {
             cost += k_bonus_for_close_cell;
-        }    }
-    if (goodie) {
-        if (distance <= 3) {
-            if (goodie_important) {
-                cost += 2 * k_bonus_for_close_cell;
-            } else {
-                cost += k_bonus_for_close_cell;
-            }
         }
     }
     if (distance >= 10) {
@@ -741,6 +738,36 @@ int my_bombs()
 }
 
 
+/**
+ * Places a bomb at the current location if everything is fine.
+ *
+ * @return true if the bomb has been placed.
+ * @global g_me, g_world, g_bombs
+ */
+bool place_bomb()
+{
+    // check potential explosion
+    bool ok_to_bomb = true;
+    int cur_x = g_me.get_x();
+    int cur_y = g_me.get_y();
+    for (auto &bomb : g_bombs) {
+        if (bomb.timeout() <= 4) {
+            g_world.compute_explosions(g_bombs);
+            if (g_world.get_explosion_timeout(cur_x, cur_y) <= 4) {
+                ok_to_bomb = false;
+                break;
+            }
+        }
+    }
+    if (ok_to_bomb) {
+        cout << "BOMB " << cur_x << " " << cur_y << endl;
+    } else {
+        cerr << "not ok to bomb" << endl;
+    }
+    return ok_to_bomb;
+}
+
+
 void game_loop(int width, int height, int my_id)
 {
     Target target;
@@ -749,6 +776,7 @@ void game_loop(int width, int height, int my_id)
     while (1) {
         g_start_time = cgame::new_time_point();
         read_data(width, height, my_id);
+        g_world.clear();
         g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
 
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
@@ -803,11 +831,14 @@ void game_loop(int width, int height, int my_id)
             // we have a target
             if (target.location == cur_loc) {
                 cerr << "we are here" << endl;
+                // :tmp:
+                cerr << "target.type=" << target.type << ", g_me.bombs_available()="
+                     << g_me.bombs_available() << ", my_bombs()=" << my_bombs()
+                     << ", vital_space=" << g_world.vital_space() << endl;
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
                      (my_bombs() == 0  || g_world.vital_space() > k_min_vital_space))) {
-                    cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
-                    command_executed = true;
+                    command_executed = place_bomb();
                 }
                 if (emergency_target) {
                     // stay
@@ -820,19 +851,18 @@ void game_loop(int width, int height, int my_id)
                     cerr << "Something is wrong, we cannot move. Abort" << endl;
                     target.type = -1;
                 } else {
-                    if (target.type == 2 && (rand() % 2 == 0) &&
-                        !bomb_near_p(cur_loc.first, cur_loc.second)) {
-                        cout << "BOMB " << cur_loc.first << " " << cur_loc.second << endl;
+                    if (target.type == 2 && (rand() % 2 == 0)
+                        /*&& !bomb_near_p(cur_loc.first, cur_loc.second)*/) {
+                        command_executed = place_bomb();
                     } else {
                         cout << "MOVE " << target.location.first << " "
                              << target.location.second << " b" << endl;
+                        command_executed = true;
                     }
-                    command_executed = true;
                 }
             }
         }
         if (!target.is_valid() && !command_executed) {
-            // if not first time, ignore current position
             target = compute_next_target(false);
             if (target.is_valid()) {
                 cout << "MOVE " << target.location.first << " "
@@ -841,6 +871,13 @@ void game_loop(int width, int height, int my_id)
                 // just stay here
                 cout << "MOVE " << cur_loc.first << " " << cur_loc.second << " d" << endl;
             }
+            command_executed = true;
+        }
+        // fail-safe
+        if (!command_executed) {
+            // just stay here
+            cerr << "No command executed, not good" << endl;
+            cout << "MOVE " << cur_loc.first << " " << cur_loc.second << " d" << endl;
         }
         if (first) {
             first = false;

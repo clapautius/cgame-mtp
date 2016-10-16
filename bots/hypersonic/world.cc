@@ -1,5 +1,6 @@
 #include <iostream>
 #include <deque>
+#include "params.h" // :grep-out:
 #include "world.h" // :grep-out:
 #include "bomb.h" // :grep-out:
 #include "cgame-common.h" // :grep-out:
@@ -29,8 +30,9 @@ void World::compute_access_zone(int start_x, int start_y)
                     { return this->is_empty(x, y); },
                     start_x, start_y);
 
-    // :tmp:
+#ifdef HYPER_DEBUG
     std::cerr << cgame::matrix_to_str(m_access_matrix) << std::endl;
+#endif
 
     // compute vital space (:fixme: - optimize this)
     for (int i = 0; i < width(); i++) {
@@ -40,6 +42,7 @@ void World::compute_access_zone(int start_x, int start_y)
             }
         }
     }
+    m_access_computed = true;
 }
 
 
@@ -104,6 +107,9 @@ Bomb& find_bomb_with_coords(vector<Bomb> &bombs, int x, int y)
  */
 void World::compute_explosions(vector<Bomb> &world_bombs)
 {
+    if (m_explosions_computed) {
+        return;
+    }
     // clear matrix (:fixme: optimize)
     for (int i = 0; i < width(); i++) {
         for (int j = 0; j < height(); j++) {
@@ -141,6 +147,7 @@ void World::compute_explosions(vector<Bomb> &world_bombs)
             }
         }
     }
+    m_explosions_computed = true;
 }
 
 

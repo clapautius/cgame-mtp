@@ -13,8 +13,15 @@ class World
 public:
 
     World(int width = 1, int height = 1)
+      : m_access_computed(false), m_explosions_computed(false)
     {
         set_world_size(width, height);
+    }
+
+    void clear()
+    {
+        m_access_computed = false;
+        m_explosions_computed = false;
     }
 
     /**
@@ -141,6 +148,10 @@ private:
     int m_vital_space;
 
     int m_boxes;
+
+    int m_access_computed;
+
+    int m_explosions_computed;
 };
 
 #endif
