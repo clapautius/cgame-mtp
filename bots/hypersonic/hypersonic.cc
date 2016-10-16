@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <time.h>
 #include <stdlib.h>
+#include "cgame-common.h" // :grep-out:
 #include "params.h" // :grep-out:
 #include "world.h" // :grep-out:
 #include "bomb.h" // :grep-out:
@@ -14,6 +15,8 @@ using namespace std;
 class World;
 class Player;
 class Bomb;
+
+static cgame::time_point_t g_start_time;
 
 static vector<pair<int, int> > coords_around_2(int x, int y, bool include_center = false);
 
@@ -48,7 +51,7 @@ public:
     void set_params(int id, int i1, int i2, int i3, int i4)
     {
         m_id = id;
-        cerr << ":debug: new params for player " << m_id << ": " << i1 << "," << i2
+        cerr << "new params for player " << m_id << ": " << i1 << "," << i2
              << ", bombs=" << i3 << ", range=" << i4 << endl;
         m_x = i1;
         m_y = i2;
@@ -149,7 +152,7 @@ void read_data(int width, int height, int my_id)
         int param1;
         int param2;
         cin >> entityType >> owner >> x >> y >> param1 >> param2; cin.ignore();
-        //cerr << ":debug: got new entity: " << entityType << endl; // :debug:
+        //cerr << "got new entity: " << entityType << endl; // :debug:
         if (entityType == 0) {
             if (owner == my_id) {
                 g_me.set_params(my_id, x, y, param1, param2);
@@ -161,7 +164,7 @@ void read_data(int width, int height, int my_id)
             g_world.matrix()[x][y] = EntityBombEnemy;
             Bomb b(owner, x, y, param1, param2);
             g_bombs.push_back(b);
-            cerr << ":debug: bomb at " << x << ", " << y << " with timer "
+            cerr << "bomb at " << x << ", " << y << " with timer "
                  << param1 << " and range " << param2 << endl;
         } else if (entityType == 2) {
             if (param1 == 2) {
@@ -169,7 +172,7 @@ void read_data(int width, int height, int my_id)
             } else {
                 g_world.matrix()[x][y] = EntityGoodieExtraRange;
             }
-            cerr << ":debug: goodie at " << x << ", " << y << " with param1 "
+            cerr << "goodie at " << x << ", " << y << " with param1 "
                  << param1 << " and param2 " << param2 <<endl;
         }
     }
@@ -195,7 +198,7 @@ vector<pair<int, int> > coords_around(int x, int y, bool include_center)
         result.push_back(make_pair(x, y + 1));
     }
 /*
-    cerr << ":debug: valid around (" << x << "," << y << "):";
+    cerr << "valid around (" << x << "," << y << "):";
     for (auto &c : result) {
         cerr << "(" << c.first << "," << c.second << ") ";
     }
@@ -236,7 +239,7 @@ bool bomb_around_p(int x, int y)
 
 pair<int, int> find_box(vector<vector<EntityType>> &m, int x, int y)
 {
-    cerr << ":debug: in find_box(" << x << "," << y << ")" << endl;
+    cerr << "in find_box(" << x << "," << y << ")" << endl;
     if (m[x][y] == EntityBox) {
         return make_pair(x, y);
     } else {
@@ -428,8 +431,6 @@ bool bomb_near_p(int x, int y)
 }
 
 
-static const int k_bonus_for_close_cell = 21;
-
 void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
 {
     if (!g_world.is_empty(x, y)) {
@@ -463,9 +464,9 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     if (g_world.entity(x, y) == EntityGoodieExtraBomb) {
         goodie = true;
         if (g_me.bombs_max() >= 2) {
-            cost += 26; // not that important
+            cost += k_goodie_not_important; // not that important
         } else {
-            cost += 100; // important
+            cost += k_goodie_bomb_important; // important
             goodie_important = true;
         }
         if (boxes == 0) {
@@ -475,9 +476,9 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     if (g_world.entity(x, y) == EntityGoodieExtraRange) {
         goodie = true;
         if (g_me.bomb_range() > 4) {
-            cost += 26; // not that important
+            cost += k_goodie_not_important; // not that important
         } else {
-            cost += 76; // important
+            cost += k_goodie_range_important; // important
         }
         if (boxes == 0) {
             target_type = 1;
@@ -554,7 +555,7 @@ bool location_safe_for_bomb_p(const Location &loc, const Bomb &b)
             safe = false;
         }
     }
-    //cerr << ":debug: location " << x << ", " << y << " is "
+    //cerr << "location " << x << ", " << y << " is "
     //     << (safe ? "safe" : "not safe") << " for bomb " << b.get_x() << ", "
     //     << b.get_y() << endl;
     return safe;
@@ -572,7 +573,7 @@ bool location_safe_p(const Location &loc)
             break;
         }
     }
-    cerr << ":debug: location " << x << ", " << y << " is "
+    cerr << "location " << x << ", " << y << " is "
          << (safe ? "safe" : "not safe") << endl;
     return safe;
 }
@@ -597,7 +598,7 @@ bool check_iminent_explosion(Location &ret)
                 g_world.compute_explosions(g_bombs);
                 break;
             } else {
-                cerr << ":debug: bomb " << bomb.description()
+                cerr << "bomb " << bomb.description()
                      << " is not accesible" << endl;
             }
         }
@@ -615,7 +616,7 @@ bool check_iminent_explosion(Location &ret)
             }
         }
         if (all_ok) {
-            cerr << ":debug: everything ok for the next explosion" << endl;
+            cerr << "everything ok for the next explosion" << endl;
             fire_in_the_hole = false;
         }
 
@@ -636,7 +637,7 @@ bool check_iminent_explosion(Location &ret)
         }
 
         if (fire_in_the_hole) {
-            cerr << ":debug: safe location: " << ret.first << ", " << ret.second
+            cerr << "safe location: " << ret.first << ", " << ret.second
                  << ", current loc: " << g_me.get_x() << ", " << g_me.get_y() << endl;
         }
     }
@@ -686,7 +687,7 @@ Target compute_next_target(bool ignore_current_position)
         targets.push_back(compute_next_target_battle_mode());
     } else {
         for (int i = 0; i < g_world.height(); i++) {
-            cerr << ":debug: cost(...," << i << "): "; // :debug:
+            cerr << "cost(...," << i << "): "; // :debug:
             for (int j = 0; j < g_world.width(); j++) {
                 if (!(ignore_current_position && j == g_me.get_x() && i == g_me.get_y())) {
                     if (g_world.is_accesible(j, i)) {
@@ -718,7 +719,7 @@ Target compute_next_target(bool ignore_current_position)
 
     if (targets.size() > 0) {
         result = targets[targets.size() - 1];
-        cerr << ":debug: best target: " << result.location.first << ", "
+        cerr << "best target: " << result.location.first << ", "
              << result.location.second << ", type=" << result.type << ", cost="
              << result.cost << endl;
     }
@@ -744,6 +745,7 @@ void game_loop(int width, int height, int my_id)
     static bool first = true;
     static Location previous_loc = make_pair(-1, -1);
     while (1) {
+        g_start_time = cgame::new_time_point();
         read_data(width, height, my_id);
         g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
 
@@ -764,12 +766,13 @@ void game_loop(int width, int height, int my_id)
         // check own explosion and look again for target
         static bool search_again = false;
         if (search_again && !emergency_target) {
-            int xx = g_me.get_x();
-            int yy = g_me.get_y();
             target.clear();
             search_again = false;
 
+            /*
             // first search near me
+            int xx = g_me.get_x();
+            int yy = g_me.get_y();
             int cost = 0;
             int target_type = 0;
             compute_cost(xx, yy, xx, yy, cost, target_type);
@@ -778,10 +781,11 @@ void game_loop(int width, int height, int my_id)
                 if (have_exit_point_from_target(test_target) &&
                     (test_target.type == 0 && g_me.bombs_available() > 0)) {
                     // found at least a box - good enough
-                    cerr << ":debug: box(es) in range - good enough" << endl;
+                    cerr << "box(es) in range - good enough" << endl;
                     target = test_target;
                 }
             }
+            */
 
         }
         for (auto bomb : g_bombs) {
@@ -796,7 +800,7 @@ void game_loop(int width, int height, int my_id)
         if (target.is_valid()) {
             // we have a target
             if (target.location == cur_loc) {
-                cerr << ":debug: we are here" << endl;
+                cerr << "we are here" << endl;
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
                      (my_bombs() == 0  || g_world.vital_space() > 12))) {
@@ -840,6 +844,7 @@ void game_loop(int width, int height, int my_id)
             first = false;
         }
         previous_loc = cur_loc;
+        cerr << "total time: " << cgame::diff_time_point_ms(g_start_time);
     } // end while(1)
 }
 
@@ -863,8 +868,7 @@ int main(int argc, char *argv[])
     int height;
     int myId;
     cin >> width >> height >> myId; cin.ignore();
-    cerr << ":debug: width=" << width << ", height: " << height
-         << ", myId=" << myId << endl;
+    cerr << "width=" << width << ", height: " << height << ", myId=" << myId << endl;
     g_world.set_world_size(width, height);
     srand(time(NULL));
 
@@ -881,7 +885,7 @@ int main(int argc, char *argv[])
 
 bool unit_tests()
 {
-    return true;
+    return test1();
 }
 
 
@@ -903,15 +907,16 @@ bool test1()
     world.matrix()[2][0] = EntityBombEnemy;
     world.compute_explosions(bombs);
     string s1 = world.get_explosion_matrix_str();
-    string s2 =
-      "39399999"
-      "39399999"
-      "33333999"
-      "39399999"
-      "39399999"
-      "99999999"
-      "99999999"
-      "99999999";
+    ostringstream ostr;
+    ostr << "39399999" << endl <<
+      "39399999" << endl <<
+      "33333999" << endl <<
+      "39399999" << endl <<
+      "39399999" << endl <<
+      "99999999" << endl <<
+      "99999999" << endl <<
+      "99999999" << endl;
+    string s2 = ostr.str();
     TEST_EQ(s1, s2);
 
     return true;

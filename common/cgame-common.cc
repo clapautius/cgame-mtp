@@ -1,6 +1,9 @@
 #include <iostream>
 #include "cgame-common.h" // :grep-out:
 
+namespace cgame
+{
+
 // Location class inmplementation
 void Location::move_towards(int x, int y, int steps)
 {
@@ -37,6 +40,23 @@ double angle_deg_to_rad(int degrees)
 {
     return degrees * 3.1415926535 / 180.0;
 }
+
+
+// time functions
+
+time_point_t new_time_point()
+{
+    return std::chrono::steady_clock::now();
+}
+
+int diff_time_point_ms(time_point_t old_time_point)
+{
+    double ret = std::chrono::duration_cast<std::chrono::milliseconds>
+      (std::chrono::steady_clock::now() - old_time_point).count();
+    return ret;
+}
+
+// end time functions
 
 
 bool unit_tests_common()
@@ -94,4 +114,6 @@ bool unit_tests_common()
     return true;
 
 #undef TEST_EQ
+}
+
 }

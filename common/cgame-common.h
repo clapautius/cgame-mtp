@@ -4,6 +4,10 @@
 #include <functional>
 #include <vector>
 #include <math.h>
+#include <chrono>
+
+namespace cgame
+{
 
 class Location
 {
@@ -105,5 +109,18 @@ int diff_angle(int angle1, int angle2);
 double angle_deg_to_rad(int degrees);
 
 bool unit_tests_common();
+
+
+// time functions
+
+using time_point_t = std::chrono::time_point<std::chrono::steady_clock>;
+
+time_point_t new_time_point();
+
+int diff_time_point_ms(time_point_t old_time_point);
+
+// end time functions
+
+} // end cgame namespace
 
 #endif
