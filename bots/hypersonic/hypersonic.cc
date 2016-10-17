@@ -557,6 +557,7 @@ bool location_safe_for_bomb_p(const Location &loc, const Bomb &b)
 }
 
 
+#if 0 // not used anymore
 bool location_safe_p(const Location &loc)
 {
     bool safe = true;
@@ -572,7 +573,7 @@ bool location_safe_p(const Location &loc)
          << (safe ? "safe" : "not safe") << endl;
     return safe;
 }
-
+#endif
 
 bool check_iminent_explosion(Location &ret)
 {
@@ -767,6 +768,17 @@ bool place_bomb()
     return ok_to_bomb;
 }
 
+/**
+ * Moves towards the specified position.
+ *
+ * @return true if the move command has been isssued.
+ */
+bool move_me(int x, int y, const std::string &msg = "")
+{
+    cout << "MOVE " << x << " " << y << " " << msg << endl;
+    return true;
+}
+
 
 void game_loop(int width, int height, int my_id)
 {
@@ -831,10 +843,11 @@ void game_loop(int width, int height, int my_id)
             // we have a target
             if (target.location == cur_loc) {
                 cerr << "we are here" << endl;
-                // :tmp:
+#ifdef HYPER_DEBUG
                 cerr << "target.type=" << target.type << ", g_me.bombs_available()="
                      << g_me.bombs_available() << ", my_bombs()=" << my_bombs()
                      << ", vital_space=" << g_world.vital_space() << endl;
+#endif
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
                      (my_bombs() == 0  || g_world.vital_space() > k_min_vital_space))) {
@@ -842,8 +855,7 @@ void game_loop(int width, int height, int my_id)
                 }
                 if (emergency_target) {
                     // stay
-                    cout << "MOVE " << cur_loc.first << " " << cur_loc.second << endl;
-                    command_executed = true;
+                    command_executed = move_me(cur_loc.first, cur_loc.second);
                 }
                 target.type = -1;
             } else {
@@ -855,9 +867,8 @@ void game_loop(int width, int height, int my_id)
                         /*&& !bomb_near_p(cur_loc.first, cur_loc.second)*/) {
                         command_executed = place_bomb();
                     } else {
-                        cout << "MOVE " << target.location.first << " "
-                             << target.location.second << " b" << endl;
-                        command_executed = true;
+                        command_executed = move_me(target.location.first,
+                                                   target.location.second, "b");
                     }
                 }
             }
@@ -865,19 +876,18 @@ void game_loop(int width, int height, int my_id)
         if (!target.is_valid() && !command_executed) {
             target = compute_next_target(false);
             if (target.is_valid()) {
-                cout << "MOVE " << target.location.first << " "
-                     << target.location.second << " c" << endl;
+                command_executed = move_me(target.location.first,
+                                        target.location.second, "c");
             } else {
                 // just stay here
-                cout << "MOVE " << cur_loc.first << " " << cur_loc.second << " d" << endl;
+                command_executed = move_me(cur_loc.first, cur_loc.second, "d");
             }
-            command_executed = true;
         }
         // fail-safe
         if (!command_executed) {
             // just stay here
             cerr << "No command executed, not good" << endl;
-            cout << "MOVE " << cur_loc.first << " " << cur_loc.second << " d" << endl;
+            command_executed = move_me(cur_loc.first, cur_loc.second, "d");
         }
         if (first) {
             first = false;
