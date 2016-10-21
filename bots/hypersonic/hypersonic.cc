@@ -22,6 +22,38 @@ static bool location_safe_for_bomb_p(const Location &loc, const Bomb &b);
 
 static Location g_initial_location;
 
+
+struct Target
+{
+    Target(Location l = make_pair(0, 0), int t = -1, int c = 0)
+      : location(l), type(t), score(c)
+    {};
+
+    bool is_valid() const
+    {
+        return type != -1;
+    }
+
+    void clear()
+    {
+        location = make_pair(-1, -1);
+        type = -1;
+        score = 0;
+    }
+
+    Location location;
+
+    int type; // -1 - no target, 0 - bomb, 1 - just move there, 2 - move and put bombs
+
+    int score;
+};
+
+
+
+Target compute_next_target_battle_mode_1();
+Target compute_next_target_battle_mode_2();
+static std::function<Target(void)> g_battle_mode_func = compute_next_target_battle_mode_2;
+
 class Player
 {
 public:
@@ -40,6 +72,16 @@ public:
     }
 
     int get_y() const
+    {
+        return m_y;
+    }
+
+    int x() const
+    {
+        return m_x;
+    }
+
+    int y() const
     {
         return m_y;
     }
@@ -277,32 +319,6 @@ bool near_coord_p(int x, int y, int target_x, int target_y)
     }
     return false;
 }
-
-
-struct Target
-{
-    Target(Location l = make_pair(0, 0), int t = -1, int c = 0)
-      : location(l), type(t), score(c)
-    {};
-
-    bool is_valid() const
-    {
-        return type != -1;
-    }
-
-    void clear()
-    {
-        location = make_pair(-1, -1);
-        type = -1;
-        score = 0;
-    }
-
-    Location location;
-
-    int type; // -1 - no target, 0 - bomb, 1 - just move there, 2 - move and put bombs
-
-    int score;
-};
 
 
 /**
@@ -678,10 +694,21 @@ bool have_exit_point_from_target(const Target &t)
 }
 
 
-Target compute_next_target_battle_mode()
+Target compute_next_target_battle_mode_1()
 {
     Target target;
     target.location = make_pair(rand() % g_world.width(), rand() % g_world.height());
+    target.type = 2;
+    target.score = 0;
+    return target;
+}
+
+
+Target compute_next_target_battle_mode_2()
+{
+    Target target;
+    // for the current game there's only one enemy
+    target.location = make_pair(g_other_players[0].get_x(), g_other_players[0].get_y());
     target.type = 2;
     target.score = 0;
     return target;
@@ -694,7 +721,7 @@ Target compute_next_target(bool ignore_current_position)
     Target result;
     if (g_world.boxes() == 0) {
         // battle mode - add a single target (type 2)
-        targets.push_back(compute_next_target_battle_mode());
+        targets.push_back(g_battle_mode_func());
     } else {
         for (int i = 0; i < g_world.height(); i++) {
             cerr << "score(...," << i << "): "; // :debug:
@@ -861,7 +888,7 @@ void game_loop(int width, int height, int my_id)
 #endif
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
-                     (my_bombs() == 0  || g_world.vital_space() > k_min_vital_space))) {
+                     (my_bombs() == 0  || g_world.vital_space() >= k_min_vital_space))) {
                     command_executed = place_bomb();
                 }
                 if (emergency_target) {
