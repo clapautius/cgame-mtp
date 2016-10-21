@@ -21,6 +21,18 @@ add_executable ("${PRJ_OUTPUT}-tests.exe" ${SRCS} ${TEST_SRCS})
 target_compile_definitions ("${PRJ_OUTPUT}-tests.exe" PUBLIC "-DUSE_TESTS")
 
 add_executable ("${PRJ_OUTPUT}-final.exe" ${BIGFILE})
+
 add_custom_target (big_file
                    COMMAND cd "${CMAKE_SOURCE_DIR}" && cat ${ALLFILES} | grep -v ":grep-out:" > "${BIGFILE}")
 add_dependencies ("${PRJ_OUTPUT}-final.exe" big_file)
+
+if (WIN32)
+   add_custom_target (clipboard ALL
+                     COMMAND cat "${BIGFILE}" | clip
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+else ()
+   add_custom_target (clipboard ALL
+                     COMMAND cat "${BIGFILE}" | | xclip -selection clipboard -display ":0"
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif ()
+add_dependencies (clipboard big_file)
