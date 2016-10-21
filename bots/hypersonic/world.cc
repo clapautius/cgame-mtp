@@ -32,7 +32,7 @@ void World::compute_access_zone(int start_x, int start_y,
                     start_x, start_y);
 
 #ifdef HYPER_DEBUG
-    std::cerr << cgame::matrix_to_str(m_access_matrix) << std::endl;
+    std::cerr << cgame::matrix_to_str(m_access_matrix, 3) << std::endl;
 #endif
 
     // compute vital space (:fixme: - optimize this)
@@ -56,7 +56,7 @@ void World::compute_access_zone(int start_x, int start_y,
                            { return this->is_empty(x, y); },
                            my_corner_x, my_corner_y);
 #ifdef HYPER_DEBUG
-    std::cerr << cgame::matrix_to_str(m_closed_areas_matrix) << std::endl;
+//    std::cerr << cgame::matrix_to_str(m_closed_areas_matrix, 3) << std::endl; // :debug:
 #endif
 }
 
@@ -151,7 +151,7 @@ void World::compute_explosions(vector<Bomb> &world_bombs)
                 if (entity(xx, yy) == EntityBombEnemy) {
                     Bomb &other_bomb = find_bomb_with_coords(world_bombs, xx, yy);
 #ifdef HYPER_DEBUG
-                    std::cerr << ":debug: found a new bomb on path: "
+                    std::cerr << "found a new bomb on path: "
                               << other_bomb.description() << std::endl;
 #endif
                     if (bomb.effective_timeout() < other_bomb.effective_timeout()) {

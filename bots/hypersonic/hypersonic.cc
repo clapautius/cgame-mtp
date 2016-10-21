@@ -101,21 +101,6 @@ vector<Player> g_other_players;
 
 vector<Bomb> g_bombs;
 
-// make a function from this
-        /*
-        // :debug:
-        for (int i = 0; i < g_world.height(); i++) {
-            for (int j = 0; j < g_world.width(); j++) {
-                if (g_world.is_accesible(j, i)) {
-                    cerr << "O";
-                } else {
-                    cerr << "X";
-                }
-            }
-            cerr << endl;
-        }
-        */
-
 
 void read_data(int width, int height, int my_id)
 {
@@ -445,7 +430,7 @@ bool bomb_near_p(int x, int y)
 /**
  * @global g_world
  */
-void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
+void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
 {
     if (!g_world.is_empty(x, y) || g_world.is_closed_area(x, y)) {
         // we cannot go there, ignore
@@ -709,7 +694,7 @@ Target compute_next_target(bool ignore_current_position)
                     if (g_world.is_accesible(j, i)) {
                         int target_type = -1;
                         int cost;
-                        compute_cost(g_me.get_x(), g_me.get_y(), j, i, cost, target_type);
+                        compute_score(g_me.get_x(), g_me.get_y(), j, i, cost, target_type);
                         if (target_type != -1) {
                             targets.push_back(Target(make_pair(j, i), target_type, cost));
                         }
@@ -834,7 +819,7 @@ void game_loop(int width, int height, int my_id)
             int yy = g_me.get_y();
             int cost = 0;
             int target_type = 0;
-            compute_cost(xx, yy, xx, yy, cost, target_type);
+            compute_score(xx, yy, xx, yy, cost, target_type);
             if (cost > k_bonus_for_close_cell) {
                 Target test_target(make_pair(g_me.get_x(), g_me.get_y()), 0);
                 if (have_exit_point_from_target(test_target) &&

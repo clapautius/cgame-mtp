@@ -61,8 +61,8 @@ vector<Location> Bomb::get_explosion_area(const World &world)
         }
     }
 #ifdef HYPER_DEBUG
-    cerr << ":debug: explosion area for bomb(" << get_x() << ", " << get_y() << ")" << endl;
-    cerr << ":debug: ";
+    cerr << "explosion area for bomb(" << get_x() << ", " << get_y() << ")" << endl;
+    cerr << "  ";
     for (auto &loc : expl_area) {
         cerr << "(" << loc.first << "," << loc.second << ") ";
     }

@@ -32,7 +32,7 @@ if (WIN32)
                      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 else ()
    add_custom_target (clipboard ALL
-                     COMMAND cat "${BIGFILE}" | | xclip -selection clipboard -display ":0"
+                     COMMAND cat "${BIGFILE}" | xclip -selection clipboard -display ":0"
                      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif ()
 add_dependencies (clipboard big_file)
