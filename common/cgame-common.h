@@ -129,7 +129,7 @@ int diff_time_point_ms(time_point_t old_time_point);
 // end time functions
 
 /**
- * @param[in] max_depth : -1 = infinite
+ * @param[in] max_dist : -1 = infinite
  *
  * @return Values you'll get in MATRIX:
  *  -1  : not explored
@@ -140,6 +140,21 @@ void bfsearch(std::vector<std::vector<int>> &matrix,
               const std::vector<std::pair<int, int>> &moving_coords,
               std::function<bool (int, int)> is_free,
               int cur_x, int cur_y,  int max_dist = -1);
+
+
+/**
+ * @param[in] max_dist : -1 = infinite
+ *
+ * @return Values you'll get in MATRIX:
+ *  -1 : not explored
+ *   0 : not free
+ *   1 : accesible
+ */
+void matrix_dfsearch(std::vector<std::vector<int>> &matrix,
+                     const std::vector<std::pair<int, int>> &moving_coords,
+                     std::function<bool (int, int)> is_free,
+                     int cur_x, int cur_y,  int max_depth = -1);
+
 
 // debug functions
 #ifdef CGAME_DEBUG

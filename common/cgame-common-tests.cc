@@ -131,6 +131,37 @@ bool unit_tests_common()
     result_vect_vertical = { 10, 9, 8, 7, 8};
     TEST_TRUE(dist_matrix[4] == result_vect_vertical);
 
+    // matrix_dfsearch test 1
+    dist_matrix.clear();
+    for (unsigned i = 0; i < 5; i++) {
+        dist_matrix.push_back(dist_vectors);
+    }
+    matrix_dfsearch(dist_matrix, moving_coords,
+                    [] (int x, int y) -> bool
+                    { return (!((x == 2 && y == 2) ||
+                                (x == 2 && y == 1) ||
+                                (x == 2 && y == 0) ||
+                                (x == 3 && y == 2) ||
+                                (x == 4 && y == 2))); },
+                    0, 0);
+/*
+    std::cout << matrix_to_str(dist_matrix, 3) << std::endl;
+*/
+    /*
+      The result should be like this:
+      1   1   0  -1  -1
+      1   1   0  -1  -1
+      1   1   0   0   0
+      1   1   1   1   1
+      1   1   1   1   1
+    */
+    result_vect_vertical = { 1, 1, 1, 1, 1};
+    TEST_TRUE(dist_matrix[0] == result_vect_vertical);
+    result_vect_vertical = { 0, 0, 0, 1, 1};
+    TEST_TRUE(dist_matrix[2] == result_vect_vertical);
+    result_vect_vertical = { -1, -1, 0, 1, 1};
+    TEST_TRUE(dist_matrix[4] == result_vect_vertical);
+
     return true;
 
 #undef TEST_EQ

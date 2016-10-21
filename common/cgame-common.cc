@@ -67,7 +67,7 @@ int diff_time_point_ms(time_point_t old_time_point)
 
 // start bfsearch functions
 
-static inline bool bfsearch_coord_is_valid(int x, int y, int width, int height)
+static inline bool matrix_coord_is_valid(int x, int y, int width, int height)
 {
     return (x >= 0 && y >= 0 && x < width && y < height);
 }
@@ -87,7 +87,7 @@ static void bfsearch_run(vector<vector<int>> &matrix,
             for (auto &p : moving_coords) {
                 int xx = elt.first + p.first;
                 int yy = elt.second + p.second;
-                if (bfsearch_coord_is_valid(xx, yy, width, height)) {
+                if (matrix_coord_is_valid(xx, yy, width, height)) {
                     if (matrix[xx][yy] == -1) {
                         if (is_free(xx, yy)) {
                             matrix[xx][yy] = cur_value + 1;
@@ -120,7 +120,7 @@ void bfsearch(vector<vector<int>> &matrix,
     for (unsigned i = 0; i < width; i++) {
         fill(matrix[i].begin(), matrix[i].end(), -1);
     }
-    if (bfsearch_coord_is_valid(cur_x, cur_y, width, height)) {
+    if (matrix_coord_is_valid(cur_x, cur_y, width, height)) {
         std::deque<pair<int, int>> list;
         matrix[cur_x][cur_y] = 0;
         list.push_back(make_pair(cur_x, cur_y));
@@ -130,6 +130,51 @@ void bfsearch(vector<vector<int>> &matrix,
 
 // end bfsearch functions
 
-
-
+static void matrix_dfsearch_rec(vector<vector<int>> &matrix,
+                                const vector<pair<int, int>> &moving_coords,
+                                function<bool (int, int)> is_free,
+                                int x, int y,  int depth, int max_depth)
+{
+    static unsigned width = matrix.size();
+    static unsigned height = matrix[0].size();
+    if ((max_depth == -1) || (max_depth > 0 && depth <= max_depth)) {
+        for (auto &p : moving_coords) {
+            int xx = x + p.first;
+            int yy = y + p.second;
+            if (matrix_coord_is_valid(xx, yy, width, height)) {
+                if (matrix[xx][yy] == -1) {
+                    if (is_free(xx, yy)) {
+                        matrix[xx][yy] = 1;
+                        matrix_dfsearch_rec(matrix, moving_coords, is_free, xx, yy,
+                                            depth + 1, max_depth);
+                    } else {
+                        matrix[xx][yy] = 0;
+                    }
+                }
+            }
+        }
+    }
 }
+
+
+void matrix_dfsearch(std::vector<std::vector<int>> &matrix,
+                     const std::vector<std::pair<int, int>> &moving_coords,
+                     std::function<bool (int, int)> is_free,
+                     int cur_x, int cur_y,  int max_depth)
+{
+    unsigned width = matrix.size();
+    if (width == 0) {
+        return;
+    }
+    unsigned height = matrix[0].size();
+    for (unsigned i = 0; i < width; i++) {
+        fill(matrix[i].begin(), matrix[i].end(), -1);
+    }
+    if (matrix_coord_is_valid(cur_x, cur_y, width, height)) {
+        // assume the first cell is free
+        matrix[cur_x][cur_y] = 1;
+        matrix_dfsearch_rec(matrix, moving_coords, is_free, cur_x, cur_y, 0, max_depth);
+    }
+}
+
+} // end namespace
