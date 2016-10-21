@@ -149,6 +149,7 @@ void read_data(int width, int height, int my_id)
             } else {
                 Player player(owner, x, y, param1);
                 g_other_players.push_back(player);
+                g_world.matrix()[x][y] = EntityEnemy;
             }
         } else if (entityType == 1) {
             g_world.matrix()[x][y] = EntityBombEnemy;
@@ -281,7 +282,7 @@ bool near_coord_p(int x, int y, int target_x, int target_y)
 struct Target
 {
     Target(Location l = make_pair(0, 0), int t = -1, int c = 0)
-      : location(l), type(t), cost(c)
+      : location(l), type(t), score(c)
     {};
 
     bool is_valid() const
@@ -293,14 +294,14 @@ struct Target
     {
         location = make_pair(-1, -1);
         type = -1;
-        cost = 0;
+        score = 0;
     }
 
     Location location;
 
     int type; // -1 - no target, 0 - bomb, 1 - just move there, 2 - move and put bombs
 
-    int cost;
+    int score;
 };
 
 
@@ -327,7 +328,7 @@ bool location_valid_p(int x, int y)
  *
  * @param[out] boxes : updates the number of boxes
  */
-int add_box_at(int x, int y, int &boxes)
+int add_items_at(int x, int y, int &boxes, int &enemies)
 {
     if (location_valid_p(x, y)) {
         EntityType e = g_world.entity(x, y);
@@ -339,6 +340,10 @@ int add_box_at(int x, int y, int &boxes)
             ++boxes;
             return 2; // to break
         }
+        if (e == EntityEnemy) {
+            ++enemies;
+            return 2;
+        }
         if (e == EntityWall || e == EntityGoodieExtraBomb || e == EntityGoodieExtraRange) {
             // will block the explosion
             return 2;
@@ -348,13 +353,12 @@ int add_box_at(int x, int y, int &boxes)
 }
 
 
-int get_no_of_boxes_in_range(int x, int y)
+void get_no_of_items_in_range(int x, int y, int &boxes, int &enemies)
 {
     int rc = 0;
-    int boxes = 0;
     // go left
     for (int i = x; i >= x - g_me.bomb_range() + 1; i--) {
-        rc = add_box_at(i, y, boxes);
+        rc = add_items_at(i, y, boxes, enemies);
         if (rc == 1) {
             continue;
         }
@@ -364,7 +368,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go right
     for (int i = x + 1; i < x + g_me.bomb_range(); i++) {
-        rc = add_box_at(i, y, boxes);
+        rc = add_items_at(i, y, boxes, enemies);
         if (rc == 1) {
             continue;
         }
@@ -374,7 +378,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go up
     for (int i = y; i >= y - g_me.bomb_range() + 1; i--) {
-        rc = add_box_at(x, i, boxes);
+        rc = add_items_at(x, i, boxes, enemies);
         if (rc == 1) {
             continue;
         }
@@ -384,7 +388,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go down
     for (int i = y + 1; i < y + g_me.bomb_range(); i++) {
-        rc = add_box_at(x, i, boxes);
+        rc = add_items_at(x, i, boxes, enemies);
         if (rc == 1) {
             continue;
         }
@@ -392,7 +396,6 @@ int get_no_of_boxes_in_range(int x, int y)
             break;
         }
     }
-    return boxes;
 }
 
 #if 0
@@ -430,7 +433,7 @@ bool bomb_near_p(int x, int y)
 /**
  * @global g_world
  */
-void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
+void compute_score(int cur_x, int cur_y, int x, int y, int &score, int &target_type)
 {
     if (!g_world.is_empty(x, y) || g_world.is_closed_area(x, y)) {
         // we cannot go there, ignore
@@ -439,27 +442,33 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_ty
         return;
     }
     int distance = g_world.distance_to(x, y);
-    int boxes = get_no_of_boxes_in_range(x, y);
+    int boxes = 0;
+    int enemies = 0;
+    get_no_of_items_in_range(x, y, boxes, enemies);
 
     // Minimum factor for a box should be 25, otherwise sometimes it doesn't worth going
     // for boxes because they are too far - we want to avoid that
     // On the other hand, if we don't have bombs available, there's no point considering
     // boxes too valuable.
-    cost = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
+    score = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
+
+    if (enemies > 0) {
+        score += k_enemy_near_score;
+    }
 
     if (bomb_around_p(x, y)) {
-        cost -= 150;
+        score -= 150;
     }
 
 #if 0
     if (bomb_near_p(x, y)) {
-        cost -= 150;
+        score -= 150;
     }
 
     // check if safe for bombs
     for (auto &b : g_bombs) {
         if (!location_safe_for_bomb_p(make_pair(x, y), b)) {
-            cost -= 105;
+            score -= 105;
         }
     }
 #endif
@@ -470,10 +479,10 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_ty
     */
     if (g_world.entity(x, y) == EntityGoodieExtraBomb) {
         //goodie = true;
-        if (g_me.bombs_max() >= 3) {
-            cost += k_goodie_not_important; // not that important
+        if (g_me.bombs_max() >= k_extra_bombs_threshold) {
+            score += k_goodie_not_important; // not that important
         } else {
-            cost += k_goodie_bomb_important; // important
+            score += k_goodie_bomb_important; // important
             //goodie_important = true;
         }
         if (boxes == 0) {
@@ -482,12 +491,12 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_ty
     }
     if (g_world.entity(x, y) == EntityGoodieExtraRange) {
         //goodie = true;
-        if (g_me.bomb_range() > 4) {
-            cost += k_goodie_not_important; // not that important
+        if (g_me.bomb_range() > k_extra_range_threshold) {
+            score += k_goodie_not_important; // not that important
         } if (g_me.bomb_range() >= 8) {
-            cost += 1; // not important at all
+            score += 1; // not important at all
         } else {
-            cost += k_goodie_range_important; // important
+            score += k_goodie_range_important; // important
         }
         if (boxes == 0) {
             target_type = 1;
@@ -497,11 +506,11 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_ty
     if (boxes > 0 && g_me.bombs_available() > 0) {
         // distance is a factor only if we have bombs available
         if (distance <= 2) {
-            cost += k_bonus_for_close_cell;
+            score += k_bonus_for_close_cell;
         }
     }
     if (distance >= 10) {
-        cost -= 30;
+        score -= 30;
     }
     if (boxes > 0) {
         target_type = 0;
@@ -510,7 +519,7 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &cost, int &target_ty
     }
 
     // :debug:
-    cerr << "[" << x << "," << y << "]<" << boxes << "," << distance << "," << cost << "> ";
+    cerr << "[" << x << "," << y << "]<" << boxes << "," << distance << "," << score << "> ";
 }
 
 
@@ -674,7 +683,7 @@ Target compute_next_target_battle_mode()
     Target target;
     target.location = make_pair(rand() % g_world.width(), rand() % g_world.height());
     target.type = 2;
-    target.cost = 0;
+    target.score = 0;
     return target;
 }
 
@@ -688,25 +697,25 @@ Target compute_next_target(bool ignore_current_position)
         targets.push_back(compute_next_target_battle_mode());
     } else {
         for (int i = 0; i < g_world.height(); i++) {
-            cerr << "cost(...," << i << "): "; // :debug:
+            cerr << "score(...," << i << "): "; // :debug:
             for (int j = 0; j < g_world.width(); j++) {
                 if (!(ignore_current_position && j == g_me.get_x() && i == g_me.get_y())) {
                     if (g_world.is_accesible(j, i)) {
                         int target_type = -1;
-                        int cost;
-                        compute_score(g_me.get_x(), g_me.get_y(), j, i, cost, target_type);
+                        int score;
+                        compute_score(g_me.get_x(), g_me.get_y(), j, i, score, target_type);
                         if (target_type != -1) {
-                            targets.push_back(Target(make_pair(j, i), target_type, cost));
+                            targets.push_back(Target(make_pair(j, i), target_type, score));
                         }
                     }
                 }
             }
             cerr << endl; // :debug:
         }
-        // sort by cost (cost is actually gain :fixme:)
+        // sort by score
         sort(targets.begin(), targets.end(),
              [] (const Target &a, const Target &b) -> bool
-             { return a.cost < b.cost; });
+             { return a.score < b.score; });
     }
 
     // take all targets and check if there are safe points from them
@@ -721,8 +730,8 @@ Target compute_next_target(bool ignore_current_position)
     if (targets.size() > 0) {
         result = targets[targets.size() - 1];
         cerr << "best target: " << result.location.first << ", "
-             << result.location.second << ", type=" << result.type << ", cost="
-             << result.cost << endl;
+             << result.location.second << ", type=" << result.type << ", score="
+             << result.score << endl;
     }
     return result;
 }
@@ -817,10 +826,10 @@ void game_loop(int width, int height, int my_id)
             // first search near me
             int xx = g_me.get_x();
             int yy = g_me.get_y();
-            int cost = 0;
+            int score = 0;
             int target_type = 0;
-            compute_score(xx, yy, xx, yy, cost, target_type);
-            if (cost > k_bonus_for_close_cell) {
+            compute_score(xx, yy, xx, yy, score, target_type);
+            if (score > k_bonus_for_close_cell) {
                 Target test_target(make_pair(g_me.get_x(), g_me.get_y()), 0);
                 if (have_exit_point_from_target(test_target) &&
                     (test_target.type == 0 && g_me.bombs_available() > 0)) {

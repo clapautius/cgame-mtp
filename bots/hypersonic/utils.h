@@ -13,7 +13,8 @@ enum EntityType
     EntityMark,
     EntityWall,
     EntityGoodieExtraBomb,
-    EntityGoodieExtraRange
+    EntityGoodieExtraRange,
+    EntityEnemy
 };
 
 using Location = std::pair<int, int>;
