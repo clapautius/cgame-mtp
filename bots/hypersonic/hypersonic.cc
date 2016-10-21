@@ -20,6 +20,7 @@ static vector<pair<int, int> > coords_around_2(int x, int y, bool include_center
 
 static bool location_safe_for_bomb_p(const Location &loc, const Bomb &b);
 
+static Location g_initial_location;
 
 class Player
 {
@@ -118,15 +119,16 @@ vector<Bomb> g_bombs;
 
 void read_data(int width, int height, int my_id)
 {
+    static bool first = true;
     g_bombs.clear();
     g_other_players.clear();
     int boxes = 0;
     for (int i = 0; i < height; i++) {
         string row;
         getline(cin, row);
-///*
+/*
         cerr << row << endl; // :debug:
-//*/
+*/
         for (int j = 0; j < width; j++) {
             if (row[j] == '.') {
                 g_world.matrix()[j][i] = EntityEmpty;
@@ -156,6 +158,9 @@ void read_data(int width, int height, int my_id)
         if (entityType == 0) {
             if (owner == my_id) {
                 g_me.set_params(my_id, x, y, param1, param2, true);
+                if (first) {
+                    g_initial_location = make_pair(x, y);
+                }
             } else {
                 Player player(owner, x, y, param1);
                 g_other_players.push_back(player);
@@ -175,6 +180,9 @@ void read_data(int width, int height, int my_id)
             cerr << "goodie at " << x << ", " << y << " with param1 "
                  << param1 << " and param2 " << param2 <<endl;
         }
+    }
+    if (first) {
+        first = false;
     }
 }
 
@@ -436,10 +444,10 @@ bool bomb_near_p(int x, int y)
  */
 void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_type)
 {
-    if (!g_world.is_empty(x, y)) {
+    if (!g_world.is_empty(x, y) || g_world.is_closed_area(x, y)) {
         // we cannot go there, ignore
         target_type = -1;
-        cerr << "not empty" << endl; // :debug:
+        cerr << "not empty (or closed)" << endl; // :debug:
         return;
     }
     int distance = g_world.distance_to(x, y);
@@ -790,7 +798,8 @@ void game_loop(int width, int height, int my_id)
         g_start_time = cgame::new_time_point();
         read_data(width, height, my_id);
         g_world.clear();
-        g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
+        g_world.compute_access_zone(g_me.get_x(), g_me.get_y(),
+                                    g_initial_location.first, g_initial_location.second);
 
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
 

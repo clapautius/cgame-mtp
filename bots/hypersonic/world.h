@@ -81,7 +81,8 @@ public:
      * Determines what cells are accesible.
      * Also computes distances from the start position to all other cells.
      */
-    void compute_access_zone(int start_x, int start_y);
+    void compute_access_zone(int start_x, int start_y,
+                             int my_corner_x, int my_corner_y);
 
     void compute_explosion_access_zone(int start_x, int start_y);
 
@@ -134,6 +135,8 @@ public:
         return m_boxes;
     }
 
+    bool is_closed_area(int x, int y) const;
+
 private:
 
     void compute_access_zone_rec(int x, int y);
@@ -142,6 +145,7 @@ private:
 
     std::vector<std::vector<EntityType> > m_matrix;
     std::vector<std::vector<int> > m_access_matrix;
+    std::vector<std::vector<int> > m_closed_areas_matrix;
     std::vector<std::vector<EntityType> > m_explosion_access_matrix;
     std::vector<std::vector<int> > m_explosion_matrix;
 

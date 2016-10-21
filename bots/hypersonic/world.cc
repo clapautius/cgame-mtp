@@ -10,7 +10,8 @@ using std::pair;
 using std::deque;
 using std::make_pair;
 
-void World::compute_access_zone(int start_x, int start_y)
+void World::compute_access_zone(int start_x, int start_y,
+                                int my_corner_x, int my_corner_y)
 {
     m_vital_space = 0;
     m_access_matrix.clear();
@@ -43,6 +44,20 @@ void World::compute_access_zone(int start_x, int start_y)
         }
     }
     m_access_computed = true;
+
+    // compute closed areas matrix (starting from 0,0)
+    m_closed_areas_matrix.clear();
+    m_closed_areas_matrix.resize(width());
+    for (int i = 0; i < width(); i++) {
+        m_closed_areas_matrix[i].resize(height());
+    }
+    cgame::matrix_dfsearch(m_closed_areas_matrix, moving_coords,
+                           [&] (int x, int y) -> bool
+                           { return this->is_empty(x, y); },
+                           my_corner_x, my_corner_y);
+#ifdef HYPER_DEBUG
+    std::cerr << cgame::matrix_to_str(m_closed_areas_matrix) << std::endl;
+#endif
 }
 
 
@@ -136,8 +151,8 @@ void World::compute_explosions(vector<Bomb> &world_bombs)
                 if (entity(xx, yy) == EntityBombEnemy) {
                     Bomb &other_bomb = find_bomb_with_coords(world_bombs, xx, yy);
 #ifdef HYPER_DEBUG
-                    cerr << ":debug: found a new bomb on path: "
-                         << other_bomb.description() << endl;
+                    std::cerr << ":debug: found a new bomb on path: "
+                              << other_bomb.description() << std::endl;
 #endif
                     if (bomb.effective_timeout() < other_bomb.effective_timeout()) {
                             other_bomb.set_effective_timeout(bomb.effective_timeout());
@@ -160,4 +175,10 @@ bool World::is_accesible(int x, int y) const
 bool World::is_explosion_accesible(int x, int y) const
 {
     return (m_explosion_access_matrix[x][y] == EntityMark);
+}
+
+
+bool World::is_closed_area(int x, int y) const
+{
+    return (m_closed_areas_matrix[x][y] != 1);
 }
