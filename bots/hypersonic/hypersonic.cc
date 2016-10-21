@@ -337,15 +337,18 @@ bool location_valid_p(int x, int y)
 }
 
 /**
- * @param[out] action_after : 0 - nothing, 1 - continue, 2 - break
+ * @return action_after : 0 - nothing, 1 - continue, 2 - break (1 - continue - not used
+ * anymore)
+ *
+ * @param[out] boxes : updates the number of boxes
  */
-int check_boxes_in_range(int x, int y, int &boxes)
+int add_box_at(int x, int y, int &boxes)
 {
     if (location_valid_p(x, y)) {
         EntityType e = g_world.entity(x, y);
         if (e == EntityBombEnemy) {
-            // there is a bomb there, ignore
-            return 1; // to continue
+            // there is a bomb there, stop
+            return 2;
         }
         if (e == EntityBox) {
             ++boxes;
@@ -366,7 +369,7 @@ int get_no_of_boxes_in_range(int x, int y)
     int boxes = 0;
     // go left
     for (int i = x; i >= x - g_me.bomb_range() + 1; i--) {
-        rc = check_boxes_in_range(i, y, boxes);
+        rc = add_box_at(i, y, boxes);
         if (rc == 1) {
             continue;
         }
@@ -376,7 +379,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go right
     for (int i = x + 1; i < x + g_me.bomb_range(); i++) {
-        rc = check_boxes_in_range(i, y, boxes);
+        rc = add_box_at(i, y, boxes);
         if (rc == 1) {
             continue;
         }
@@ -386,7 +389,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go up
     for (int i = y; i >= y - g_me.bomb_range() + 1; i--) {
-        rc = check_boxes_in_range(x, i, boxes);
+        rc = add_box_at(x, i, boxes);
         if (rc == 1) {
             continue;
         }
@@ -396,7 +399,7 @@ int get_no_of_boxes_in_range(int x, int y)
     }
     // go down
     for (int i = y + 1; i < y + g_me.bomb_range(); i++) {
-        rc = check_boxes_in_range(x, i, boxes);
+        rc = add_box_at(x, i, boxes);
         if (rc == 1) {
             continue;
         }
@@ -458,6 +461,10 @@ void compute_cost(int cur_x, int cur_y, int x, int y, int &cost, int &target_typ
     // On the other hand, if we don't have bombs available, there's no point considering
     // boxes too valuable.
     cost = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
+
+    if (bomb_around_p(x, y)) {
+        cost -= 150;
+    }
 
 #if 0
     if (bomb_near_p(x, y)) {
