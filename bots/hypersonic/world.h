@@ -81,8 +81,9 @@ public:
      * Determines what cells are accesible.
      * Also computes distances from the start position to all other cells.
      */
-    void compute_access_zone(int start_x, int start_y,
-                             int my_corner_x, int my_corner_y);
+    void compute_access_zone(int start_x, int start_y);
+
+    void compute_closed_zone(int my_corner_x, int my_corner_y);
 
     void compute_explosion_access_zone(int start_x, int start_y);
 

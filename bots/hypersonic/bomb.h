@@ -15,7 +15,7 @@ public:
       : m_x(-1), m_y(-1)
     {};
 
-    Bomb(int owner, int x, int y, int time_remaining, int range = 3)
+    Bomb(int owner, int x, int y, int time_remaining = 8, int range = 3)
       : m_owner(owner), m_x(x), m_y(y), m_time_remaining(time_remaining),
         m_effective_timeout(time_remaining), m_range(range)
     {

@@ -53,6 +53,7 @@ struct Target
 Target compute_next_target_battle_mode_1();
 Target compute_next_target_battle_mode_2();
 static std::function<Target(void)> g_battle_mode_func = compute_next_target_battle_mode_2;
+//static std::function<Target(void)> g_battle_mode_func = compute_next_target_battle_mode_1;
 
 class Player
 {
@@ -142,6 +143,14 @@ Player g_me;
 vector<Player> g_other_players;
 
 vector<Bomb> g_bombs;
+
+
+int remaining_time()
+{
+    int remaining = 100 - cgame::diff_time_point_ms(g_start_time);
+    cerr << "remaining time: " << remaining << endl;
+    return remaining;
+}
 
 
 void read_data(int width, int height, int my_id)
@@ -291,6 +300,19 @@ pair<int, int> find_box(vector<vector<EntityType>> &m, int x, int y)
         }
         return make_pair(-1, -1);
     }
+}
+
+
+bool near_enemy_p(int x , int y)
+{
+    vector<pair<int, int> > around = coords_around(x, y);
+    for (auto &coord : around) {
+        if (g_world.matrix()[coord.first][coord.second] == EntityEnemy) {
+            return true;
+        }
+    }
+    return false;
+
 }
 
 
@@ -468,9 +490,14 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &score, int &target_t
     // boxes too valuable.
     score = boxes * (g_me.bombs_available() ? 25 : 5) - distance;
 
+#if 0
     if (enemies > 0) {
         score += k_enemy_near_score;
+        if (near_enemy_p(cur_x, cur_y)) {
+            score += 101;
+        }
     }
+#endif
 
     if (bomb_around_p(x, y)) {
         score -= 150;
@@ -521,14 +548,14 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &score, int &target_t
 
     if (boxes > 0 && g_me.bombs_available() > 0) {
         // distance is a factor only if we have bombs available
-        if (distance <= 2) {
+        if (distance <= k_close_distance_for_bonus) {
             score += k_bonus_for_close_cell;
         }
     }
     if (distance >= 10) {
         score -= 30;
     }
-    if (boxes > 0) {
+    if (boxes > 0 || enemies > 0) {
         target_type = 0;
     } else {
         target_type = 1;
@@ -710,7 +737,7 @@ Target compute_next_target_battle_mode_2()
     // for the current game there's only one enemy
     target.location = make_pair(g_other_players[0].get_x(), g_other_players[0].get_y());
     target.type = 2;
-    target.score = 0;
+    target.score = k_almost_max_score;
     return target;
 }
 
@@ -782,7 +809,7 @@ int my_bombs()
  * @return true if the bomb has been placed.
  * @global g_me, g_world, g_bombs
  */
-bool place_bomb()
+bool place_bomb(Target &t)
 {
     // check potential explosion
     bool ok_to_bomb = true;
@@ -798,7 +825,24 @@ bool place_bomb()
         }
     }
     if (ok_to_bomb) {
-        cout << "BOMB " << cur_x << " " << cur_y << endl;
+        cerr << "i'm trying to place a bomb at " << cur_x << ", " << cur_y << endl;
+        if (remaining_time() > 20) {
+            g_world.matrix()[cur_x][cur_y] = EntityBombEnemy;
+            Bomb b(g_me.id(), cur_x, cur_x);
+            g_bombs.push_back(b);
+            g_world.compute_closed_zone(g_initial_location.first,
+                                        g_initial_location.second);
+            Target t_new = compute_next_target(false);
+            if (t_new.is_valid()) {
+                cout << "BOMB " << t_new.location.first << " "
+                     << t_new.location.second << endl;
+            } else {
+                cout << "BOMB " << cur_x << " " << cur_y << endl;
+            }
+        } else {
+            t.type = -1;
+            cout << "BOMB " << cur_x << " " << cur_y << endl;
+        }
     } else {
         cerr << "not ok to bomb" << endl;
     }
@@ -826,8 +870,8 @@ void game_loop(int width, int height, int my_id)
         g_start_time = cgame::new_time_point();
         read_data(width, height, my_id);
         g_world.clear();
-        g_world.compute_access_zone(g_me.get_x(), g_me.get_y(),
-                                    g_initial_location.first, g_initial_location.second);
+        g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
+        g_world.compute_closed_zone(g_initial_location.first, g_initial_location.second);
 
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
 
@@ -877,6 +921,15 @@ void game_loop(int width, int height, int my_id)
         }
 
         bool command_executed = false;
+
+        // if we have the same position as the enemy, place a bomb
+        if (g_me.x() == g_other_players[0].x() && g_me.y() == g_other_players[0].y()) {
+            target.clear();
+            target.location = make_pair(g_me.x(), g_me.y());
+            target.type = 0;
+            target.score = 0;
+        }
+
         if (target.is_valid()) {
             // we have a target
             if (target.location == cur_loc) {
@@ -889,7 +942,8 @@ void game_loop(int width, int height, int my_id)
                 if ((target.type == 0 || target.type == 2) &&
                     (g_me.bombs_available() &&
                      (my_bombs() == 0  || g_world.vital_space() >= k_min_vital_space))) {
-                    command_executed = place_bomb();
+                    Target new_target;
+                    command_executed = place_bomb(new_target);
                 }
                 if (emergency_target) {
                     // stay
@@ -903,7 +957,8 @@ void game_loop(int width, int height, int my_id)
                 } else {
                     if (target.type == 2 && (rand() % 2 == 0)
                         /*&& !bomb_near_p(cur_loc.first, cur_loc.second)*/) {
-                        command_executed = place_bomb();
+                        Target new_target; // :fixme: atm ignore
+                        command_executed = place_bomb(new_target);
                     } else {
                         command_executed = move_me(target.location.first,
                                                    target.location.second, "b");

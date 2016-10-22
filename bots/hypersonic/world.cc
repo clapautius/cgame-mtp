@@ -10,8 +10,7 @@ using std::pair;
 using std::deque;
 using std::make_pair;
 
-void World::compute_access_zone(int start_x, int start_y,
-                                int my_corner_x, int my_corner_y)
+void World::compute_access_zone(int start_x, int start_y)
 {
     m_vital_space = 0;
     m_access_matrix.clear();
@@ -32,7 +31,7 @@ void World::compute_access_zone(int start_x, int start_y,
                     start_x, start_y);
 
 #ifdef HYPER_DEBUG
-    std::cerr << cgame::matrix_to_str(m_access_matrix, 3) << std::endl;
+//    std::cerr << cgame::matrix_to_str(m_access_matrix, 3) << std::endl;
 #endif
 
     // compute vital space (:fixme: - optimize this)
@@ -44,8 +43,18 @@ void World::compute_access_zone(int start_x, int start_y,
         }
     }
     m_access_computed = true;
+}
 
-    // compute closed areas matrix (starting from 0,0)
+
+void World::compute_closed_zone(int my_corner_x, int my_corner_y)
+{
+    std::vector<std::pair<int, int>> moving_coords;
+    moving_coords.push_back(make_pair(0, -1));
+    moving_coords.push_back(make_pair(0, 1));
+    moving_coords.push_back(make_pair(-1, 0));
+    moving_coords.push_back(make_pair(1, 0));
+
+    // compute closed areas matrix
     m_closed_areas_matrix.clear();
     m_closed_areas_matrix.resize(width());
     for (int i = 0; i < width(); i++) {
