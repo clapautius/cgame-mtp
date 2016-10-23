@@ -313,7 +313,10 @@ int add_items_at(int x, int y, int &boxes, int &enemies, bool ignore_goodies = f
             return 2;
         }
         if (e == EntityBox) {
-            ++boxes;
+            // only take into account boxes that are not in the range of other bombs
+            if (g_world.get_explosion_timeout(x, y) == 9) {
+                ++boxes;
+            }
             return 2; // to break
         }
         if (e == EntityEnemy) {
@@ -584,7 +587,7 @@ bool location_safe_p(const Location &loc)
 }
 #endif
 
-bool check_iminent_explosion(Location &ret)
+bool check_iminent_explosion(Location &ret, const Target &target)
 {
     ret = make_pair(-1, -1);
     bool fire_in_the_hole = false;
@@ -625,7 +628,8 @@ bool check_iminent_explosion(Location &ret)
             fire_in_the_hole = false;
         }
 
-        // not all ok - try to find a safe spot (the closest one)
+        // not all ok - try to find a safe spot (the closest one or the dest. of the next
+        // target)
         int min_dist = 100;
         if (fire_in_the_hole) {
             vector<Location> locations = coords_around_2(xx, yy, true);
@@ -640,6 +644,14 @@ bool check_iminent_explosion(Location &ret)
                     if (d < min_dist) {
                         min_dist = d;
                         ret = l;
+                    }
+                    if (target.is_valid() &&
+                        l.first == target.location.first &&
+                        l.second == target.location.second) {
+                        cerr << "safe location is target dest." << endl;
+                        min_dist = -1;
+                        ret = l;
+                        break;
                     }
                 }
             }
@@ -935,13 +947,14 @@ void game_loop(int width, int height, int my_id)
         g_world.clear();
         g_world.compute_access_zone(g_me.get_x(), g_me.get_y());
         g_world.compute_closed_zone(g_initial_location.first, g_initial_location.second);
+        g_world.compute_explosions(g_bombs);
 
         Location cur_loc = make_pair(g_me.get_x(), g_me.get_y());
 
         // first try to protect from explosions
         Location emergency_location;
         bool emergency_target = false;
-        if (check_iminent_explosion(emergency_location)) {
+        if (check_iminent_explosion(emergency_location, target)) {
             // preparing for explosion
             if (emergency_location.first != -1) {
                 target.location = emergency_location;
