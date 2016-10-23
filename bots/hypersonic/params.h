@@ -25,4 +25,7 @@ static const int k_extra_range_threshold = 4;
 
 static const int k_min_score_for_bomb = 20;
 
+static const int k_far_away = 8;
+static const int k_cost_for_far_away = 51;
+
 #endif

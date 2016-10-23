@@ -26,7 +26,7 @@ static Location g_initial_location;
 struct Target
 {
     Target(Location l = make_pair(0, 0), int t = -1, int c = 0)
-      : location(l), type(t), score(c)
+      : location(l), type(static_cast<TargetType>(t)), score(c)
     {};
 
     bool is_valid() const
@@ -37,7 +37,7 @@ struct Target
     void clear()
     {
         location = make_pair(-1, -1);
-        type = -1;
+        type = TargetInvalid;
         score = 0;
     }
 
@@ -51,7 +51,7 @@ struct Target
 
     Location location;
 
-    int type; // -1 - no target, 0 - bomb, 1 - just move there, 2 - move and put bombs
+    TargetType type;
 
     int score;
 };
@@ -414,6 +414,8 @@ void get_no_of_items_in_range(int x, int y, int &boxes, int &enemies)
     for (int i = x; i >= x - g_me.bomb_range() + 1; i--) {
         if (i == x) {
             ignore_goodies = true;
+        } else {
+            ignore_goodies = false;
         }
         rc = add_items_at(i, y, boxes, enemies, ignore_goodies);
         if (rc == 1) {
@@ -433,11 +435,12 @@ void get_no_of_items_in_range(int x, int y, int &boxes, int &enemies)
             break;
         }
     }
-    ignore_goodies = false;
     // go up
     for (int i = y; i >= y - g_me.bomb_range() + 1; i--) {
         if (i == y) {
             ignore_goodies = true;
+        } else {
+            ignore_goodies = false;
         }
         rc = add_items_at(x, i, boxes, enemies, ignore_goodies);
         if (rc == 1) {
@@ -575,8 +578,8 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &score, int &target_t
             score += k_bonus_for_close_cell;
         }
     }
-    if (distance >= 10) {
-        score -= 30;
+    if (distance >= k_far_away) {
+        score -= k_cost_for_far_away;
     }
     if (boxes > 0 || enemies > 0) {
         target_type = 0;
@@ -748,7 +751,7 @@ Target compute_next_target_battle_mode_1()
 {
     Target target;
     target.location = make_pair(rand() % g_world.width(), rand() % g_world.height());
-    target.type = 2;
+    target.type = TargetWalkAndBombs;
     target.score = 0;
     return target;
 }
@@ -759,7 +762,7 @@ Target compute_next_target_battle_mode_2()
     Target target;
     // for the current game there's only one enemy
     target.location = make_pair(g_other_players[0].get_x(), g_other_players[0].get_y());
-    target.type = 2;
+    target.type = TargetWalkAndBombs;
     target.score = k_almost_max_score;
     return target;
 }
@@ -863,7 +866,7 @@ bool place_bomb(Target &t)
                 cout << "BOMB " << cur_x << " " << cur_y << endl;
             }
         } else {
-            t.type = -1;
+            t.type = TargetInvalid;
             cout << "BOMB " << cur_x << " " << cur_y << endl;
         }
     } else {
@@ -917,7 +920,7 @@ void execute_target(const Location &cur_loc, Target &target, const bool emergenc
             // stay
             command_executed = move_me(cur_loc.first, cur_loc.second, text);
         }
-        target.type = -1;
+        target.type = TargetInvalid;
     } else {
         /*
         if (cur_loc == previous_loc && !emergency_target) {
@@ -944,6 +947,41 @@ void execute_target(const Location &cur_loc, Target &target, const bool emergenc
 }
 
 
+/**
+ * Changes the target if there's something interesting near me.
+ *
+ * @globals g_me, g_world.
+ */
+void search_near_me(Target &target)
+{
+    // first search near me
+    int cur_x = g_me.get_x();
+    int cur_y = g_me.get_y();
+    int score = 0;
+    int target_type = 0;
+    bool ok_near_me = true;
+    compute_score(cur_x, cur_y, cur_x, cur_y, score, target_type);
+    if (target.type == TargetWalk) {
+        ok_near_me = true;
+    } else {
+        if (score < k_min_score_for_bomb) {
+            ok_near_me = false;
+        }
+        if (! (g_me.bombs_available() > 1 ||
+               (target.is_valid() && g_me.bombs_available() > 0 && g_world.distance_to(target.location) >= 5))) {
+            ok_near_me = false;
+        }
+    }
+    if (ok_near_me) {
+        Target test_target(make_pair(cur_x, cur_y), TargetBomb);
+        if (have_exit_point_from_target(test_target)) {
+            cerr << "box(es) in range - good enough" << endl;
+            target = test_target;
+        }
+    }
+}
+
+
 void game_loop(int width, int height, int my_id)
 {
     Target target;
@@ -965,7 +1003,7 @@ void game_loop(int width, int height, int my_id)
             // preparing for explosion
             if (emergency_location.first != -1) {
                 target.location = emergency_location;
-                target.type = 1;
+                target.type = TargetWalk;
                 emergency_target = true;
             }
         }
@@ -975,20 +1013,7 @@ void game_loop(int width, int height, int my_id)
         if (search_again && !emergency_target) {
             target.clear();
             search_again = false;
-
-            // first search near me
-            int cur_x = g_me.get_x();
-            int cur_y = g_me.get_y();
-            int score = 0;
-            int target_type = 0;
-            compute_score(cur_x, cur_y, cur_x, cur_y, score, target_type);
-            if (score > k_min_score_for_bomb && g_me.bombs_available() > 1) {
-                Target test_target(make_pair(cur_x, cur_y), 0);
-                if (have_exit_point_from_target(test_target)) {
-                    cerr << "box(es) in range - good enough" << endl;
-                    target = test_target;
-                }
-            }
+            search_near_me(target);
         }
 
         for (auto bomb : g_bombs) {
@@ -1006,7 +1031,7 @@ void game_loop(int width, int height, int my_id)
             (g_me.x() == g_other_players[0].x() && g_me.y() == g_other_players[0].y())) {
             target.clear();
             target.location = make_pair(g_me.x(), g_me.y());
-            target.type = 0;
+            target.type = TargetBomb;
             target.score = 0;
             cerr << "placing a bomb near enemy" << endl;
         }

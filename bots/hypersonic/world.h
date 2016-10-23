@@ -96,6 +96,11 @@ public:
         return m_access_matrix[x][y];
     }
 
+    int distance_to(const Location &location) const
+    {
+        return m_access_matrix[location.first][location.second];
+    }
+
     bool is_explosion_accesible(int x, int y) const;
 
     /**
