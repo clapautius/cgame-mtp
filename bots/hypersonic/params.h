@@ -23,4 +23,6 @@ static const int k_enemy_near_score = 75;
 static const int k_extra_bombs_threshold = 3;
 static const int k_extra_range_threshold = 4;
 
+static const int k_min_score_for_bomb = 20;
+
 #endif

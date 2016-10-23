@@ -41,6 +41,14 @@ struct Target
         score = 0;
     }
 
+    string to_str() const
+    {
+        ostringstream ostr;
+        ostr << "Target((" << location.first << "," << location.second << "),t=" << type
+             << ")";
+        return ostr.str();
+    }
+
     Location location;
 
     int type; // -1 - no target, 0 - bomb, 1 - just move there, 2 - move and put bombs
@@ -366,7 +374,7 @@ bool location_valid_p(int x, int y)
  *
  * @param[out] boxes : updates the number of boxes
  */
-int add_items_at(int x, int y, int &boxes, int &enemies)
+int add_items_at(int x, int y, int &boxes, int &enemies, bool ignore_goodies = false)
 {
     if (location_valid_p(x, y)) {
         EntityType e = g_world.entity(x, y);
@@ -382,9 +390,16 @@ int add_items_at(int x, int y, int &boxes, int &enemies)
             ++enemies;
             return 2;
         }
-        if (e == EntityWall || e == EntityGoodieExtraBomb || e == EntityGoodieExtraRange) {
-            // will block the explosion
-            return 2;
+        if (ignore_goodies) {
+            if (e == EntityWall) {
+                // will block the explosion
+                return 2;
+            }
+        } else {
+            if (e == EntityWall || e == EntityGoodieExtraBomb || e == EntityGoodieExtraRange) {
+                // will block the explosion
+                return 2;
+            }
         }
     }
     return 0;
@@ -394,9 +409,13 @@ int add_items_at(int x, int y, int &boxes, int &enemies)
 void get_no_of_items_in_range(int x, int y, int &boxes, int &enemies)
 {
     int rc = 0;
+    bool ignore_goodies = false;
     // go left
     for (int i = x; i >= x - g_me.bomb_range() + 1; i--) {
-        rc = add_items_at(i, y, boxes, enemies);
+        if (i == x) {
+            ignore_goodies = true;
+        }
+        rc = add_items_at(i, y, boxes, enemies, ignore_goodies);
         if (rc == 1) {
             continue;
         }
@@ -414,9 +433,13 @@ void get_no_of_items_in_range(int x, int y, int &boxes, int &enemies)
             break;
         }
     }
+    ignore_goodies = false;
     // go up
     for (int i = y; i >= y - g_me.bomb_range() + 1; i--) {
-        rc = add_items_at(x, i, boxes, enemies);
+        if (i == y) {
+            ignore_goodies = true;
+        }
+        rc = add_items_at(x, i, boxes, enemies, ignore_goodies);
         if (rc == 1) {
             continue;
         }
@@ -562,7 +585,7 @@ void compute_score(int cur_x, int cur_y, int x, int y, int &score, int &target_t
     }
 
     // :debug:
-    cerr << "[" << x << "," << y << "]<" << boxes << "," << distance << "," << score << "> ";
+    cerr << "(" << x << "," << y << ")<" << boxes << "," << distance << "," << score << "> ";
 }
 
 
@@ -861,6 +884,66 @@ bool move_me(int x, int y, const std::string &msg = "")
 }
 
 
+/**
+ * Checks if target is valid.
+ *
+ * @param[in] cur_loc
+ * @param[in,out] target
+ * @param[in] emergency_target
+ * @param[out] command_executed : true if a command has been executed.
+ */
+void execute_target(const Location &cur_loc, Target &target, const bool emergency_target,
+                    Location &previous_loc, bool &command_executed, const string &text)
+{
+    cerr << "Executing target " << target.to_str() << "; text=" << text << endl;
+    if (!target.is_valid()) {
+        return;
+    }
+    // we have a target
+    if (target.location == cur_loc) {
+        cerr << "we are here" << endl;
+#ifdef HYPER_DEBUG
+        cerr << "target.type=" << target.type << ", g_me.bombs_available()="
+             << g_me.bombs_available() << ", my_bombs()=" << my_bombs()
+             << ", vital_space=" << g_world.vital_space() << endl;
+#endif
+        if ((target.type == 0 || target.type == 2) &&
+            (g_me.bombs_available() &&
+             (my_bombs() == 0  || g_world.vital_space() >= k_min_vital_space))) {
+            Target new_target;
+            command_executed = place_bomb(new_target);
+        }
+        if (emergency_target) {
+            // stay
+            command_executed = move_me(cur_loc.first, cur_loc.second, text);
+        }
+        target.type = -1;
+    } else {
+        /*
+        if (cur_loc == previous_loc && !emergency_target) {
+            cerr << "Something is wrong, we cannot move. Abort" << endl;
+            target.type = -1;
+            previous_loc = make_pair(-1, -1);
+        } else {
+        */
+        if (target.type == 2) {
+            if (rand() % 3 == 0)
+                /*&& !bomb_near_p(cur_loc.first, cur_loc.second)*/ {
+                Target new_target; // :fixme: atm ignore
+                command_executed = place_bomb(new_target);
+            } else {
+                command_executed = move_me(target.location.first,
+                                           target.location.second, text);
+            }
+        } else {
+            command_executed = move_me(target.location.first,
+                                       target.location.second, text);
+        }
+            /*}*/
+    }
+}
+
+
 void game_loop(int width, int height, int my_id)
 {
     Target target;
@@ -893,25 +976,21 @@ void game_loop(int width, int height, int my_id)
             target.clear();
             search_again = false;
 
-            /*
             // first search near me
-            int xx = g_me.get_x();
-            int yy = g_me.get_y();
+            int cur_x = g_me.get_x();
+            int cur_y = g_me.get_y();
             int score = 0;
             int target_type = 0;
-            compute_score(xx, yy, xx, yy, score, target_type);
-            if (score > k_bonus_for_close_cell) {
-                Target test_target(make_pair(g_me.get_x(), g_me.get_y()), 0);
-                if (have_exit_point_from_target(test_target) &&
-                    (test_target.type == 0 && g_me.bombs_available() > 0)) {
-                    // found at least a box - good enough
+            compute_score(cur_x, cur_y, cur_x, cur_y, score, target_type);
+            if (score > k_min_score_for_bomb && g_me.bombs_available() > 1) {
+                Target test_target(make_pair(cur_x, cur_y), 0);
+                if (have_exit_point_from_target(test_target)) {
                     cerr << "box(es) in range - good enough" << endl;
                     target = test_target;
                 }
             }
-            */
-
         }
+
         for (auto bomb : g_bombs) {
             if (bomb.timeout() == 1) {
                 // next turn abort the current target
@@ -923,54 +1002,24 @@ void game_loop(int width, int height, int my_id)
         bool command_executed = false;
 
         // if we have the same position as the enemy, place a bomb
-        if (g_me.x() == g_other_players[0].x() && g_me.y() == g_other_players[0].y()) {
+        if (!emergency_target &&
+            (g_me.x() == g_other_players[0].x() && g_me.y() == g_other_players[0].y())) {
             target.clear();
             target.location = make_pair(g_me.x(), g_me.y());
             target.type = 0;
             target.score = 0;
+            cerr << "placing a bomb near enemy" << endl;
         }
 
         if (target.is_valid()) {
-            // we have a target
-            if (target.location == cur_loc) {
-                cerr << "we are here" << endl;
-#ifdef HYPER_DEBUG
-                cerr << "target.type=" << target.type << ", g_me.bombs_available()="
-                     << g_me.bombs_available() << ", my_bombs()=" << my_bombs()
-                     << ", vital_space=" << g_world.vital_space() << endl;
-#endif
-                if ((target.type == 0 || target.type == 2) &&
-                    (g_me.bombs_available() &&
-                     (my_bombs() == 0  || g_world.vital_space() >= k_min_vital_space))) {
-                    Target new_target;
-                    command_executed = place_bomb(new_target);
-                }
-                if (emergency_target) {
-                    // stay
-                    command_executed = move_me(cur_loc.first, cur_loc.second);
-                }
-                target.type = -1;
-            } else {
-                if (cur_loc == previous_loc && !emergency_target) {
-                    cerr << "Something is wrong, we cannot move. Abort" << endl;
-                    target.type = -1;
-                } else {
-                    if (target.type == 2 && (rand() % 2 == 0)
-                        /*&& !bomb_near_p(cur_loc.first, cur_loc.second)*/) {
-                        Target new_target; // :fixme: atm ignore
-                        command_executed = place_bomb(new_target);
-                    } else {
-                        command_executed = move_me(target.location.first,
-                                                   target.location.second, "b");
-                    }
-                }
-            }
+            execute_target(cur_loc, target, emergency_target, previous_loc,
+                           command_executed, "A");
         }
         if (!target.is_valid() && !command_executed) {
             target = compute_next_target(false);
             if (target.is_valid()) {
-                command_executed = move_me(target.location.first,
-                                        target.location.second, "c");
+                execute_target(cur_loc, target, emergency_target, previous_loc,
+                               command_executed, "B");
             } else {
                 // just stay here
                 command_executed = move_me(cur_loc.first, cur_loc.second, "d");
@@ -980,7 +1029,7 @@ void game_loop(int width, int height, int my_id)
         if (!command_executed) {
             // just stay here
             cerr << "No command executed, not good" << endl;
-            command_executed = move_me(cur_loc.first, cur_loc.second, "d");
+            command_executed = move_me(cur_loc.first, cur_loc.second, "em");
         }
         if (first) {
             first = false;
