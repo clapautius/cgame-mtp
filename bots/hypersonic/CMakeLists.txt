@@ -10,9 +10,16 @@ set (CMAKE_CXX_FLAGS_RELWITHDEBINFO ${MTP_FLAGS})
 set (CMAKE_CXX_FLAGS_RELEASE ${MTP_FLAGS})
 
 set (BIGFILE ".hypersonic.cc")
-set (SRCS "../../common/cgame-common.cc" hypersonic.cc bomb.cc world.cc)
-set (HEADERS "../../common/cgame-common.h" params.h utils.h world.h bomb.h tests.h)
-set (TEST_SRCS "../../common/cgame-common-tests.cc" hypersonic-tests.cc)
+
+set (SRCS
+  "../../common/cgame-common.cc" hypersonic.cc bomb.cc world.cc player.cc)
+
+set (HEADERS
+  "../../common/cgame-common.h" params.h utils.h world.h bomb.h tests.h player.h)
+
+set (TEST_SRCS
+  "../../common/cgame-common-tests.cc" hypersonic-tests.cc)
+
 set (ALLFILES ${HEADERS} ${SRCS})
 
 include_directories (${HYPERSONIC_SOURCE_DIR}/common)

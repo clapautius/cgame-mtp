@@ -6,15 +6,14 @@
 #include "params.h" // :grep-out:
 #include "world.h" // :grep-out:
 #include "bomb.h" // :grep-out:
+#include "player.h" // :grep-out:
 #include "tests.h" // :grep-out:
 
 using namespace std;
 
-class World;
-class Player;
-class Bomb;
-
 static cgame::time_point_t g_start_time;
+
+static bool g_battle_mode = false;
 
 static vector<pair<int, int> > coords_around_2(int x, int y, bool include_center = false);
 
@@ -60,89 +59,10 @@ struct Target
 
 Target compute_next_target_battle_mode_1();
 Target compute_next_target_battle_mode_2();
+Target compute_next_target_battle_mode_3();
 static std::function<Target(void)> g_battle_mode_func = compute_next_target_battle_mode_2;
 //static std::function<Target(void)> g_battle_mode_func = compute_next_target_battle_mode_1;
 
-class Player
-{
-public:
-
-    Player(int id = -1, int x = 0, int y = 0, int bombs_avail = 0)
-      : m_id(id), m_x(x), m_y(y), m_bombs_avail(bombs_avail),
-        m_bombs_max(bombs_avail), m_range(0)
-    {
-        cerr << "new player " << m_id << ": " << m_x << "," << m_y
-             << ", bombs.av.=" << m_bombs_avail << ", range=" << m_range << endl;
-    }
-
-    int get_x() const
-    {
-        return m_x;
-    }
-
-    int get_y() const
-    {
-        return m_y;
-    }
-
-    int x() const
-    {
-        return m_x;
-    }
-
-    int y() const
-    {
-        return m_y;
-    }
-
-    int id() const
-    {
-        return m_id;
-    }
-
-    void set_params(int id, int i1, int i2, int i3, int i4, bool is_me = false)
-    {
-        m_id = id;
-        cerr << "new params for " << (is_me ? "me " : "player ") << m_id << ": "
-             << i1 << "," << i2 << ", bombs.av.=" << i3 << ", range=" << i4 << endl;
-        m_x = i1;
-        m_y = i2;
-        m_bombs_avail = i3;
-        m_range = i4;
-        if (m_bombs_avail > m_bombs_max) {
-            m_bombs_max = m_bombs_avail;
-        }
-    }
-
-    int bombs_available() const
-    {
-        return m_bombs_avail;
-    }
-
-    int bombs_max() const
-    {
-        return m_bombs_max;
-    }
-
-    int bomb_range() const
-    {
-        return m_range;
-    }
-
-private:
-
-    int m_id;
-
-    int m_x;
-
-    int m_y;
-
-    int m_bombs_avail;
-
-    int m_bombs_max;
-
-    int m_range;
-};
 
 World g_world;
 
@@ -206,8 +126,18 @@ void read_data(int width, int height, int my_id)
                     g_initial_location = make_pair(x, y);
                 }
             } else {
-                Player player(owner, x, y, param1);
-                g_other_players.push_back(player);
+                bool found = false;
+                for (auto &player : g_other_players) {
+                    if (player.id() == owner) {
+                        player.set_params(owner, x, y, param1, param2);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    Player player(owner, x, y, param1);
+                    g_other_players.push_back(player);
+                }
                 g_world.matrix()[x][y] = EntityEnemy;
             }
         } else if (entityType == 1) {
@@ -768,11 +698,23 @@ Target compute_next_target_battle_mode_2()
 }
 
 
+Target compute_next_target_battle_mode_3()
+{
+    Target target;
+    // for the current game there's only one enemy
+    target.location = make_pair(g_other_players[0].get_x(), g_other_players[0].get_y());
+    target.type = TargetWalkAndBombs;
+    target.score = k_almost_max_score;
+    return target;
+}
+
+
 Target compute_next_target(bool ignore_current_position)
 {
     vector<Target> targets;
     Target result;
     if (g_world.boxes() == 0) {
+        g_battle_mode = true;
         // battle mode - add a single target (type 2)
         targets.push_back(g_battle_mode_func());
     } else {
