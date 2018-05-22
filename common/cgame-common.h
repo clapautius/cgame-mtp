@@ -4,6 +4,17 @@
 #include <functional>
 #include <vector>
 #include <math.h>
+#include <chrono>
+
+// uncomment this to get debug message for the common functions
+#define CGAME_DEBUG
+
+#ifdef CGAME_DEBUG
+#include <sstream>
+#endif
+
+namespace cgame
+{
 
 class Location
 {
@@ -105,5 +116,70 @@ int diff_angle(int angle1, int angle2);
 double angle_deg_to_rad(int degrees);
 
 bool unit_tests_common();
+
+
+// time functions
+
+using time_point_t = std::chrono::time_point<std::chrono::steady_clock>;
+
+time_point_t new_time_point();
+
+int diff_time_point_ms(time_point_t old_time_point);
+
+// end time functions
+
+/**
+ * @param[in] max_dist : -1 = infinite
+ *
+ * @return Values you'll get in MATRIX:
+ *  -1  : not explored
+ *  -2  : not free
+ * >= 0 : distance from current point
+ */
+void bfsearch(std::vector<std::vector<int>> &matrix,
+              const std::vector<std::pair<int, int>> &moving_coords,
+              std::function<bool (int, int)> is_free,
+              int cur_x, int cur_y,  int max_dist = -1);
+
+
+/**
+ * @param[in] max_dist : -1 = infinite
+ *
+ * @return Values you'll get in MATRIX:
+ *  -1 : not explored
+ *   0 : not free
+ *   1 : accesible
+ */
+void matrix_dfsearch(std::vector<std::vector<int>> &matrix,
+                     const std::vector<std::pair<int, int>> &moving_coords,
+                     std::function<bool (int, int)> is_free,
+                     int cur_x, int cur_y,  int max_depth = -1);
+
+
+// debug functions
+#ifdef CGAME_DEBUG
+
+template<class C>
+  std::string matrix_to_str(const std::vector<std::vector<C>> &matrix, int elt_width = -1)
+{
+    std::ostringstream ostr;
+    if (matrix.size() == 0) {
+        return "";
+    }
+    for (unsigned j = 0; j < matrix[0].size(); j++) {
+        for (unsigned i = 0; i < matrix.size(); i++) {
+            if (elt_width > 0) {
+                ostr.width(elt_width);
+            }
+            ostr << matrix[i][j] << " ";
+        }
+        ostr << std::endl;
+    }
+    return ostr.str();
+}
+
+#endif // CGAME_DEBUG
+
+} // end cgame namespace
 
 #endif

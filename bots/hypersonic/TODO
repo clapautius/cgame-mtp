@@ -1,0 +1,1 @@
+- put bombs only if (timer > 4 or not in range of other bombs)
