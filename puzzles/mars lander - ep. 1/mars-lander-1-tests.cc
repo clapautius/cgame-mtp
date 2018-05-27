@@ -1,3 +1,3 @@
-int foo()
+void foo()
 {
 }

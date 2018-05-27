@@ -52,3 +52,12 @@ Constraints:
     -90 ≤ rotate ≤ 90
     0 ≤ power ≤ 4
     Response time per turn ≤ 100ms
+
+The game simulates a free fall without atmosphere. Gravity on Mars is 3.711 m/s² . For a thrust power of X, a push force equivalent to X m/s² is generated and X liters of fuel are consumed. As such, a thrust power of 4 in an almost vertical position is needed to compensate for the gravity on Mars.
+
+For a landing to be successful, the ship must:
+
+- land on flat ground
+- land in a vertical position (tilt angle = 0°)
+- vertical speed must be limited ( ≤ 40m/s in absolute value)
+- horizontal speed must be limited ( ≤ 20m/s in absolute value)

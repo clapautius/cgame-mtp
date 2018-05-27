@@ -4,10 +4,12 @@ cmake_minimum_required (VERSION 2.8)
 project (MARS_LANDER_1)
 set (PRJ_OUTPUT "mars-lander-1")
 set (MTP_FLAGS "-Wall -Wpedantic -ggdb -std=c++11")
-set (SRCS "../../common/cgame-common.cc"
+set (SRCS
+  #"../../common/cgame-common.cc"
   mars-lander-1.cc)
-set (HEADERS "../../common/cgame-common.h")
-set (TEST_SRCS "../../common/cgame-common-tests.cc"
+#set (HEADERS "../../common/cgame-common.h")
+set (TEST_SRCS
+  #"../../common/cgame-common-tests.cc"
   mars-lander-1-tests.cc)
 
 
