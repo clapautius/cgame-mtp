@@ -2,29 +2,18 @@
 #include <iostream>
 #include <utility>
 #include "cgame-common.h" // :grep-out:
+#include "cgame-common-tests.h" // :grep-out:
 
 using namespace std;
 
 namespace cgame
 {
 
+int cgame_test_no = 1;
+int cgame_tests_failed = 0;
+
 bool unit_tests_common()
 {
-    static int test_no = 1;
-#define TEST_EQ(X, Y) do                                                \
-    { ++test_no;                                                        \
-        if (X != Y) {                                                   \
-            std::cerr << "test " << test_no << " fail: " << X << "," << Y << std::endl; \
-            return false; };                                            \
-    } while(0)
-
-#define TEST_TRUE(X) do                                                 \
-    { ++test_no;                                                        \
-        if (!(X)) {                                                     \
-            std::cerr << "test " << test_no << " failed " << std::endl; \
-            return false; };                                            \
-    } while(0)
-
     std::vector<int> v = { 0, 7, -1, 3};
     TEST_EQ(count_if<int>([] (int i) -> bool { return i < 0; }, v), 1);
 
@@ -164,7 +153,6 @@ bool unit_tests_common()
 
     return true;
 
-#undef TEST_EQ
 }
 
 }
