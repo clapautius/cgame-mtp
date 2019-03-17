@@ -5,9 +5,9 @@ project (MARS_LANDER_2)
 set (PRJ_OUTPUT "bender-ep-4")
 set (MTP_FLAGS "-Wall -Wpedantic -ggdb -std=c++11")
 set (SRCS "../../common/cgame-common.cc"
-  bender-ep-4.cc)
+  bender-ep-4.cc worldmatrix2d.cc)
 set (HEADERS "../../common/cgame-common.h"
-  )
+  worldmatrix2d.h)
 set (TEST_SRCS "../../common/cgame-common-tests.cc" "${PRJ_OUTPUT}-tests.cc")
 
 
